@@ -1,0 +1,168 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { xBotReplies, projects } from '@react-native-vibe-code/database'
+import { eq } from 'drizzle-orm'
+import { handleClaudeCodeGeneration } from '@/lib/claude-code-handler'
+import { blobUrlsToBase64 } from '@/lib/x-bot/extract-images'
+
+export const maxDuration = 300 // 5 minutes
+
+// Secret key for x-bot internal calls
+const X_BOT_SECRET = process.env.X_BOT_SECRET
+
+interface GenerateRequest {
+  projectId: string
+  userId: string
+  appDescription: string
+  imageUrls: string[]
+  tweetId: string
+  sandboxId: string
+  secret: string
+}
+
+export async function POST(request: NextRequest) {
+  const body: GenerateRequest = await request.json()
+  const { projectId, userId, appDescription, imageUrls, tweetId, sandboxId, secret } = body
+
+  // Validate internal secret
+  if (secret !== X_BOT_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Validate required fields
+  if (!projectId || !userId || !appDescription || !tweetId) {
+    return NextResponse.json(
+      { error: 'Missing required fields' },
+      { status: 400 }
+    )
+  }
+
+  console.log(`[X-Bot Generate] Starting generation for tweet ${tweetId}, project ${projectId}`)
+
+  try {
+    // Update xBotReplies status to generating
+    await db
+      .update(xBotReplies)
+      .set({ generationStatus: 'generating' })
+      .where(eq(xBotReplies.tweetId, tweetId))
+
+    // Convert blob URLs to base64 for AI
+    let images: string[] = []
+    if (imageUrls && imageUrls.length > 0) {
+      console.log(`[X-Bot Generate] Converting ${imageUrls.length} images to base64`)
+      images = await blobUrlsToBase64(imageUrls)
+    }
+
+    // Build the prompt
+    const prompt = buildPrompt(appDescription, images.length > 0)
+
+    // Track generation result
+    let generationSucceeded = false
+    let generationError: string | null = null
+
+    // Call the Claude Code handler
+    await handleClaudeCodeGeneration(
+      {
+        projectId,
+        userID: userId,
+        userMessage: prompt,
+        images,
+        isFirstMessage: true,
+        sandboxId,
+        messageId: `xbot-${tweetId}`,
+      },
+      {
+        onMessage: (message) => {
+          // Log progress (we can't stream to Twitter, so just log)
+          console.log(`[X-Bot Generate] Progress: ${message.substring(0, 100)}...`)
+        },
+        onComplete: async (result) => {
+          console.log(`[X-Bot Generate] Generation complete for tweet ${tweetId}`)
+          generationSucceeded = true
+
+          // Update xBotReplies with completion
+          await db
+            .update(xBotReplies)
+            .set({ generationStatus: 'completed' })
+            .where(eq(xBotReplies.tweetId, tweetId))
+
+          // Trigger reply endpoint (fire and forget)
+          const replyUrl = new URL('/api/x-bot/reply', request.url)
+          fetch(replyUrl.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tweetId,
+              projectId,
+              secret: X_BOT_SECRET,
+            }),
+          }).catch((err) => {
+            console.error(`[X-Bot Generate] Failed to trigger reply:`, err)
+          })
+        },
+        onError: async (error) => {
+          console.error(`[X-Bot Generate] Error for tweet ${tweetId}:`, error)
+          generationError = error
+          generationSucceeded = false
+
+          // Update xBotReplies with failure
+          await db
+            .update(xBotReplies)
+            .set({
+              generationStatus: 'failed',
+              errorMessage: error,
+            })
+            .where(eq(xBotReplies.tweetId, tweetId))
+        },
+      }
+    )
+
+    // Return status based on result
+    if (generationSucceeded) {
+      return NextResponse.json({ success: true, projectId })
+    } else {
+      return NextResponse.json(
+        { success: false, error: generationError || 'Generation failed' },
+        { status: 500 }
+      )
+    }
+  } catch (error: any) {
+    console.error('[X-Bot Generate] Unexpected error:', error)
+
+    // Update status on error
+    await db
+      .update(xBotReplies)
+      .set({
+        generationStatus: 'failed',
+        errorMessage: error.message || 'Unexpected error',
+      })
+      .where(eq(xBotReplies.tweetId, tweetId))
+
+    return NextResponse.json(
+      { error: error.message || 'Generation failed' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * Build a prompt for app generation from tweet description
+ */
+function buildPrompt(appDescription: string, hasImages: boolean): string {
+  let prompt = `Create a React Native Expo mobile app based on this request:\n\n${appDescription}\n\n`
+
+  if (hasImages) {
+    prompt += `I've attached reference images for the design. Please use them as inspiration for the UI layout and styling.\n\n`
+  }
+
+  prompt += `Requirements:
+- Create a functional mobile app using React Native and Expo
+- Use a clean, modern UI design
+- Make sure the app runs without errors
+- Focus on the core functionality described
+- Use appropriate React Native components and styling
+
+Please create all necessary files and ensure the app compiles and runs.`
+
+  return prompt
+}

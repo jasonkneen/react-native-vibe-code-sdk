@@ -1,0 +1,71 @@
+{
+  "name": "@react-native-vibe-code/payments",
+  "version": "0.0.1",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/lib/server.d.ts",
+      "import": "./dist/lib/server.mjs",
+      "require": "./dist/lib/server.js"
+    },
+    "./client": {
+      "types": "./dist/lib/client.d.ts",
+      "import": "./dist/lib/client.mjs",
+      "require": "./dist/lib/client.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.mjs",
+      "require": "./dist/components/index.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.mjs",
+      "require": "./dist/hooks/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.mjs",
+      "require": "./dist/types/index.js"
+    },
+    "./config": {
+      "types": "./dist/lib/config.d.ts",
+      "import": "./dist/lib/config.mjs",
+      "require": "./dist/lib/config.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@react-native-vibe-code/database": "workspace:*",
+    "@react-native-vibe-code/ui": "workspace:*",
+    "@polar-sh/sdk": "^0.31.0",
+    "drizzle-orm": "^0.37.0"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@react-native-vibe-code/tsconfig": "workspace:*",
+    "@types/react": "^18.2.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.5.4"
+  }
+}

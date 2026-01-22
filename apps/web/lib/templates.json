@@ -1,0 +1,9 @@
+{
+  "react-native-expo": {
+    "name": "React Native Expo",
+    "lib": ["react-native", "expo"],
+    "file": "App.tsx",
+    "instructions": "A React Native Expo app that reloads automatically.",
+    "port": 8081
+  }
+}

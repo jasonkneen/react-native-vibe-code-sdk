@@ -1,0 +1,7 @@
+{
+  "name": "@react-native-vibe-code/starter-kit",
+  "version": "0.0.1",
+  "license": "MIT",
+  "description": "Complete Expo starter template with 67+ packages for AI-powered mobile app development",
+  "private": true
+}

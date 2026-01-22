@@ -1,0 +1,79 @@
+{
+  "name": "@react-native-vibe-code/visual-edits",
+  "version": "0.0.1",
+  "license": "MIT",
+  "description": "Visual element selection and editing for React Native Vibe Code",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.mjs",
+      "require": "./dist/types/index.js"
+    },
+    "./babel": {
+      "types": "./dist/babel/index.d.ts",
+      "import": "./dist/babel/index.mjs",
+      "require": "./dist/babel/index.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox/index.d.ts",
+      "import": "./dist/sandbox/index.mjs",
+      "require": "./dist/sandbox/index.js"
+    },
+    "./web": {
+      "types": "./dist/web/index.d.ts",
+      "import": "./dist/web/index.mjs",
+      "require": "./dist/web/index.js"
+    },
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.mjs",
+      "require": "./dist/api/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "pusher-js": "^8.4.0"
+  },
+  "peerDependencies": {
+    "next": ">=14.0.0",
+    "pusher": ">=5.0.0",
+    "react": ">=18.0.0",
+    "react-native": ">=0.72.0"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    },
+    "pusher": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@react-native-vibe-code/tsconfig": "workspace:*",
+    "@types/react": "^19.0.0",
+    "pusher": "^5.2.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.5.4"
+  }
+}
