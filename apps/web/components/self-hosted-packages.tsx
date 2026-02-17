@@ -2,7 +2,6 @@
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import Link from 'next/link'
 import {
   Bot,
   Code2,
@@ -43,7 +42,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Claude Agent SDK executor for running AI agents in isolated sandboxes',
     icon: <Bot className="w-5 h-5" />,
     color: 'purple',
-    docsPath: '/docs/packages/agent',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/agent',
   },
   {
     id: 'sandbox',
@@ -51,7 +50,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Core sandbox environment with E2B integration and template management',
     icon: <Terminal className="w-5 h-5" />,
     color: 'green',
-    docsPath: '/docs/packages/sandbox',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/sandbox',
   },
   {
     id: 'starter-kit',
@@ -59,7 +58,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Complete Expo template with 67+ packages for AI-powered mobile development',
     icon: <Sparkles className="w-5 h-5" />,
     color: 'emerald',
-    docsPath: '/docs/packages/starter-kit',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/starter-kit',
   },
   {
     id: 'prompt-engine',
@@ -67,7 +66,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'AI prompt templates and guidelines for code generation',
     icon: <ScrollText className="w-5 h-5" />,
     color: 'violet',
-    docsPath: '/docs/packages/prompt-engine',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/prompt-engine',
   },
   {
     id: 'chat',
@@ -75,7 +74,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'AI chat system with multi-provider LLM support and streaming',
     icon: <MessageSquare className="w-5 h-5" />,
     color: 'blue',
-    docsPath: '/docs/packages/chat',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/chat',
   },
   {
     id: 'code-editor',
@@ -83,7 +82,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Monaco Editor integration with syntax highlighting and themes',
     icon: <Code2 className="w-5 h-5" />,
     color: 'yellow',
-    docsPath: '/docs/packages/code-editor',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/code-editor',
   },
   {
     id: 'visual-edits',
@@ -91,7 +90,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Point-and-click visual editing powered by custom Babel plugin',
     icon: <MousePointer2 className="w-5 h-5" />,
     color: 'violet',
-    docsPath: '/docs/packages/visual-edits',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/visual-edits',
   },
   {
     id: 'database',
@@ -99,7 +98,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'PostgreSQL database layer with Drizzle ORM and Neon support',
     icon: <Database className="w-5 h-5" />,
     color: 'emerald',
-    docsPath: '/docs/packages/database',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/database',
   },
   {
     id: 'auth',
@@ -107,7 +106,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Authentication system with Better Auth and OAuth support',
     icon: <Key className="w-5 h-5" />,
     color: 'orange',
-    docsPath: '/docs/packages/auth',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/auth',
   },
   {
     id: 'convex',
@@ -115,7 +114,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Convex backend integration for serverless functions and real-time data',
     icon: <Server className="w-5 h-5" />,
     color: 'cyan',
-    docsPath: '/docs/packages/convex',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/convex',
   },
   {
     id: 'publish',
@@ -123,7 +122,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Cloudflare Pages deployment with custom domain management',
     icon: <Globe className="w-5 h-5" />,
     color: 'blue',
-    docsPath: '/docs/packages/publish',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/publish',
   },
   {
     id: 'pusher',
@@ -131,7 +130,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Real-time communication with Pusher for live updates',
     icon: <Radio className="w-5 h-5" />,
     color: 'pink',
-    docsPath: '/docs/packages/pusher',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/pusher',
   },
   {
     id: 'payments',
@@ -139,7 +138,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Subscription billing with Polar integration',
     icon: <Wallet className="w-5 h-5" />,
     color: 'green',
-    docsPath: '/docs/packages/payments',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/payments',
   },
   {
     id: 'integrations',
@@ -147,7 +146,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'slash (/) command to trigger integrations including Google, Resend, and AI LLM services',
     icon: <Layers className="w-5 h-5" />,
     color: 'orange',
-    docsPath: '/docs/packages/integrations',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/integrations',
   },
   {
     id: 'restore',
@@ -155,7 +154,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Git-based history and project restoration',
     icon: <History className="w-5 h-5" />,
     color: 'amber',
-    docsPath: '/docs/packages/restore',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/restore',
   },
   {
     id: 'remix',
@@ -163,7 +162,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Project forking and remixing functionality',
     icon: <GitFork className="w-5 h-5" />,
     color: 'teal',
-    docsPath: '/docs/packages/remix',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/remix',
   },
   {
     id: 'error-manager',
@@ -171,7 +170,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Error handling with toast notifications and real-time updates',
     icon: <Zap className="w-5 h-5" />,
     color: 'red',
-    docsPath: '/docs/packages/error-manager',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/error-manager',
   },
   {
     id: 'ui',
@@ -179,7 +178,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Shared UI component library built with shadcn/ui and Radix',
     icon: <Palette className="w-5 h-5" />,
     color: 'indigo',
-    docsPath: '/docs/packages/ui',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/ui',
   },
   {
     id: 'config',
@@ -187,7 +186,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Shared configuration and template management',
     icon: <Settings className="w-5 h-5" />,
     color: 'gray',
-    docsPath: '/docs/packages/config',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/config',
   },
   {
     id: 'types',
@@ -195,7 +194,7 @@ const packages: PackageInfo[] = [
     shortDescription: 'Shared TypeScript type definitions',
     icon: <FileCode className="w-5 h-5" />,
     color: 'blue',
-    docsPath: '/docs/packages/types',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/types',
   },
 ]
 
@@ -252,7 +251,7 @@ export function SelfHostedPackages() {
             Ready to self-host your own AI-powered IDE?
           </p>
           <a
-            href="https://github.com/nicholasoxford/capsule"
+            href="https://github.com/react-native-vibe-code/react-native-vibe-code-sdk"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
@@ -306,9 +305,9 @@ function PackageCard({
         asChild
         className="w-full justify-center"
       >
-        <Link href={pkg.docsPath}>
+        <a href={pkg.docsPath} target="_blank" rel="noopener noreferrer">
           Learn more
-        </Link>
+        </a>
       </Button>
     </div>
   )
