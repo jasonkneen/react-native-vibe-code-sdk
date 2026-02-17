@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { LandingFeatures } from './landing-features'
 import { SelfHostedPackages } from './self-hosted-packages'
-import { Cloud, Server } from 'lucide-react'
+import { RunLocally } from './run-locally'
+import { Cloud, Server, Terminal } from 'lucide-react'
 
-type ViewMode = 'cloud' | 'self-hosted'
+type ViewMode = 'cloud' | 'self-hosted' | 'run-locally'
 
 export function LandingFeaturesToggle() {
   const [viewMode, setViewMode] = useState<ViewMode>('cloud')
@@ -40,6 +41,18 @@ export function LandingFeaturesToggle() {
             <Server className="w-4 h-4" />
             Self Hosted
           </button>
+          <button
+            onClick={() => setViewMode('run-locally')}
+            className={cn(
+              "flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200",
+              viewMode === 'run-locally'
+                ? "bg-foreground text-background shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Terminal className="w-4 h-4" />
+            Run Locally
+          </button>
         </div>
       </div>
 
@@ -47,8 +60,10 @@ export function LandingFeaturesToggle() {
       <div className="transition-all duration-300 mt-20">
         {viewMode === 'cloud' ? (
           <LandingFeatures />
-        ) : (
+        ) : viewMode === 'self-hosted' ? (
           <SelfHostedPackages />
+        ) : (
+          <RunLocally />
         )}
       </div>
     </div>
