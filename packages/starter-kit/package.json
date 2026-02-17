@@ -2,6 +2,34 @@
   "name": "@react-native-vibe-code/starter-kit",
   "version": "0.0.1",
   "license": "MIT",
-  "description": "Complete Expo starter template with 67+ packages for AI-powered mobile app development",
-  "private": true
+  "description": "CLI to scaffold React Native Vibe Code projects from the starter template",
+  "bin": {
+    "create-rnvibecode": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public",
+    "name": "create-rnvibecode"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "degit": "^2.8.4",
+    "fs-extra": "^11.2.0",
+    "ora": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/degit": "^2.8.6",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.2.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.5.4"
+  }
 }
