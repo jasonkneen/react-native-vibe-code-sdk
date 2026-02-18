@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "setup": "ln -sf ../../.env.local apps/web/.env.local && echo 'Symlinked .env.local to apps/web/'",
-    "dev": "turbo run dev --concurrency=23",
+    "dev": "turbo run dev --concurrency=25",
     "dev:light": "turbo run dev:app --filter=@react-native-vibe-code/web",
     "dev:watch": "turbo watch build --filter='./packages/*'",
     "dev:web": "turbo run dev --filter=@react-native-vibe-code/web",
@@ -174,13 +174,17 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "sharp"
-    ],
-    "patchedDependencies": {
-      "react-placeholder-typing@1.0.11": "patches/react-placeholder-typing@1.0.11.patch"
-    },
-    "overrides": {
-      "@types/react": "19.2.7",
-      "@types/react-dom": "19.2.3"
-    }
-  }
+    ]
+  },
+  "overrides": {
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3"
+  },
+  "patchedDependencies": {
+    "react-placeholder-typing@1.0.11": "patches/react-placeholder-typing@1.0.11.patch"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

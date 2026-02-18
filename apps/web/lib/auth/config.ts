@@ -7,10 +7,12 @@ import { Polar } from '@polar-sh/sdk'
 import { CONFIG } from '@react-native-vibe-code/config'
 import { sendWelcomeEmail } from '@/lib/email'
 
-const polarClient = new Polar({
-  accessToken: process.env.POLAR_ACCESS_TOKEN!,
-  server: process.env.POLAR_SERVER! as 'production' | 'sandbox',
-})
+const polarClient = process.env.POLAR_ACCESS_TOKEN
+  ? new Polar({
+      accessToken: process.env.POLAR_ACCESS_TOKEN,
+      server: (process.env.POLAR_SERVER || 'sandbox') as 'production' | 'sandbox',
+    })
+  : null
 
 // Calculate reset date (1st of next month)
 function getNextResetDate(): Date {
@@ -106,13 +108,17 @@ export const auth = betterAuth({
     usePlural: false, // Fix for Neon compatibility
   }),
   socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    },
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          },
+        }
+      : {}),
   },
   emailAndPassword: {
-    enabled: false, // We only want Google OAuth
+    enabled: !process.env.GOOGLE_CLIENT_ID, // Enable email/password when Google OAuth is not configured
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
@@ -126,32 +132,41 @@ export const auth = betterAuth({
           sendWelcomeEmail({ name: user.name, email: user.email }).catch((err) => {
             console.error('[Auth] Failed to send welcome email:', err)
           })
+          // Ensure subscription exists (when Polar is not configured)
+          if (!polarClient) {
+            await ensureUserSubscription(user.id)
+          }
         },
       },
     },
   },
   plugins: [
     nextCookies(), // Required for proper cookie handling in Next.js
-    polar({
-      client: polarClient,
-      createCustomerOnSignUp: true,
-      onCustomerCreated: async (customer: any, user: any) => {
-        // Ensure subscription exists with customer ID when Polar customer is created
-        await ensureUserSubscription(user.id, customer.id)
-      },
-      use: [
-        checkout({
-          products: [{
-            productId: process.env.NEXT_PUBLIC_POLAR_PRO_PRODUCT_ID!,
-            slug: "pro"
-          }],
-          successUrl: "/success?checkout_id={CHECKOUT_ID}",
-          authenticatedUsersOnly: true
-        }),
-        portal(),
-        usage()
-      ]
-    })
+    ...(polarClient
+      ? [
+          polar({
+            client: polarClient,
+            createCustomerOnSignUp: true,
+            onCustomerCreated: async (customer: any, user: any) => {
+              await ensureUserSubscription(user.id, customer.id)
+            },
+            use: [
+              checkout({
+                products: [
+                  {
+                    productId: process.env.NEXT_PUBLIC_POLAR_PRO_PRODUCT_ID!,
+                    slug: 'pro',
+                  },
+                ],
+                successUrl: '/success?checkout_id={CHECKOUT_ID}',
+                authenticatedUsersOnly: true,
+              }),
+              portal(),
+              usage(),
+            ],
+          }),
+        ]
+      : []),
   ],
   trustedOrigins: [
     process.env.NEXT_PUBLIC_APP_URL,

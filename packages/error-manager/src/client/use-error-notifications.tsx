@@ -85,6 +85,10 @@ export function useErrorNotifications(
 
     const channelName = customChannelName || `${projectId}-errors`
     const pusherClient = getPusherClient()
+    if (!pusherClient) {
+      // Pusher not configured — skip real-time error notifications
+      return
+    }
     const channel = pusherClient.subscribe(channelName)
 
     channel.bind('pusher:subscription_succeeded', () => {

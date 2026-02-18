@@ -39,9 +39,12 @@ export function usePusherHoverSelection({
   useEffect(() => {
     if (!sandboxId || !enabled) return
 
+    // Skip if Pusher is not configured
+    if (!process.env.NEXT_PUBLIC_PUSHER_APP_KEY || !process.env.NEXT_PUBLIC_PUSHER_CLUSTER) return
+
     // Initialize Pusher client
-    const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_APP_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+    const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_APP_KEY, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
     })
 
     pusherRef.current = pusher
