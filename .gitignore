@@ -58,3 +58,6 @@ mobile-capsule/**/build/
 # Next.js in monorepo apps
 apps/*/.next/
 dist
+
+# Remotion (separate repo)
+remotion/
