@@ -5,8 +5,8 @@
 
 import { list, del } from '@vercel/blob'
 import { db } from './db'
-import { projects, commits } from './db/schema'
-import { eq, lt, desc } from 'drizzle-orm'
+import { projects, commits } from '@react-native-vibe-code/database'
+import { eq, lt, desc, isNotNull } from 'drizzle-orm'
 
 interface CleanupResult {
   deletedCount: number
@@ -42,6 +42,7 @@ export async function cleanupProjectBundles(
     const commitsToKeep = projectCommits.slice(0, keepCount)
     const commitsToDelete = projectCommits.slice(keepCount)
 
+    console.log(
       `[BundleCleanup] Keeping ${commitsToKeep.length} commits, deleting ${commitsToDelete.length}`
     )
 
@@ -53,6 +54,7 @@ export async function cleanupProjectBundles(
           prefix: `bundles/${projectId}/${commit.githubSHA}/`,
         })
 
+        console.log(
           `[BundleCleanup] Found ${blobs.length} blobs for commit ${commit.githubSHA}`
         )
 
@@ -73,6 +75,7 @@ export async function cleanupProjectBundles(
         // Delete commit record from database
         await db.delete(commits).where(eq(commits.id, commit.id))
 
+        console.log(
           `[BundleCleanup] Deleted commit record: ${commit.githubSHA}`
         )
       } catch (error) {
@@ -86,6 +89,7 @@ export async function cleanupProjectBundles(
       }
     }
 
+    console.log(
       `[BundleCleanup] Cleanup complete. Deleted ${result.deletedCount} blobs, freed ${(result.freedSpace / 1024 / 1024).toFixed(2)} MB`
     )
   } catch (error) {
@@ -117,8 +121,9 @@ export async function cleanupAllProjects(
     const projectsWithBundles = await db
       .select()
       .from(projects)
-      .where(eq(projects.staticBundleUrl, null)) // Only projects with bundles
+      .where(isNotNull(projects.staticBundleUrl)) // Only projects with bundles
 
+    console.log(
       `[BundleCleanup] Found ${projectsWithBundles.length} projects with bundles`
     )
 
@@ -140,6 +145,7 @@ export async function cleanupAllProjects(
       }
     }
 
+    console.log(
       `[BundleCleanup] Total cleanup complete. Deleted ${totalResult.deletedCount} blobs, freed ${(totalResult.freedSpace / 1024 / 1024).toFixed(2)} MB`
     )
   } catch (error) {
@@ -168,6 +174,7 @@ export async function cleanupBundlesOlderThan(
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysOld)
 
+    console.log(
       `[BundleCleanup] Cleaning up bundles older than ${cutoffDate.toISOString()}`
     )
 
@@ -210,6 +217,7 @@ export async function cleanupBundlesOlderThan(
       }
     }
 
+    console.log(
       `[BundleCleanup] Cleanup complete. Deleted ${result.deletedCount} blobs, freed ${(result.freedSpace / 1024 / 1024).toFixed(2)} MB`
     )
   } catch (error) {

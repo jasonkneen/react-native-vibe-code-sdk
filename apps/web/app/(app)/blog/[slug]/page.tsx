@@ -15,12 +15,12 @@ export async function generateMetadata({ params }: Props) {
   const payload = await getPayload({ config: payloadConfig })
 
   const { docs } = await payload.find({
-    collection: 'posts',
+    collection: 'posts' as any,
     where: { slug: { equals: slug } },
     limit: 1,
   })
 
-  const post = docs[0]
+  const post = docs[0] as any
   if (!post) return { title: 'Post Not Found' }
 
   return {
@@ -35,7 +35,7 @@ export default async function BlogPostPage({ params }: Props) {
   const payload = await getPayload({ config: payloadConfig })
 
   const { docs } = await payload.find({
-    collection: 'posts',
+    collection: 'posts' as any,
     where: { slug: { equals: slug } },
     limit: 1,
     depth: 2,

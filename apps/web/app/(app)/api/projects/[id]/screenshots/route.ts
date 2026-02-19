@@ -141,7 +141,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // Upload mobile screenshot to Vercel Blob
     const mobileBlob = await put(
       `screenshots/${params.id}-mobile.png`,
-      mobileScreenshot,
+      Buffer.from(mobileScreenshot),
       {
         access: 'public',
         contentType: 'image/png',
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // Upload desktop screenshot to Vercel Blob
     const desktopBlob = await put(
       `screenshots/${params.id}-desktop.png`,
-      desktopScreenshot,
+      Buffer.from(desktopScreenshot),
       {
         access: 'public',
         contentType: 'image/png',

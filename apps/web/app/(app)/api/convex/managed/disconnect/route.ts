@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       // Get the Convex project ID
       const convexProjectId = await getManagedProjectId({
         teamScopedToken,
-        teamSlug: credentials.teamSlug,
-        projectSlug: credentials.projectSlug,
+        teamSlug: credentials.teamSlug!,
+        projectSlug: credentials.projectSlug!,
       })
 
       // Delete the project from Convex

@@ -3,7 +3,7 @@
 
 # Python SDK
 # from e2b import Sandbox, AsyncSandbox
-# sandbox = Sandbox("vibe-expo-sandbox") # Sync sandbox
+# sandbox = Sandbox.create("vibe-expo-sandbox") # Sync sandbox
 # sandbox = await AsyncSandbox.create("vibe-expo-sandbox") # Async sandbox
 
 # JS SDK

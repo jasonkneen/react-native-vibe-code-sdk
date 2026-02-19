@@ -1,7 +1,16 @@
 'use client'
 
 import React from 'react'
-import type { SerializedEditorState, SerializedLexicalNode } from 'lexical'
+
+// Local type definitions to avoid direct dependency on the 'lexical' package
+interface SerializedEditorState {
+  root: SerializedNode
+}
+
+interface SerializedLexicalNode {
+  type: string
+  version: number
+}
 
 type Props = {
   content: SerializedEditorState | null | undefined
@@ -53,24 +62,25 @@ function renderNode(node: SerializedNode, index: number): React.ReactNode {
     case 'root':
       return (
         <div key={key}>
-          {node.children?.map((child, i) => renderNode(child, i))}
+          {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
         </div>
       )
 
     case 'paragraph':
       return (
         <p key={key}>
-          {node.children?.map((child, i) => renderNode(child, i))}
+          {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
         </p>
       )
 
-    case 'heading':
-      const HeadingTag = (node.tag || 'h2') as keyof JSX.IntrinsicElements
+    case 'heading': {
+      const HeadingTag = (node.tag || 'h2') as React.ElementType
       return (
         <HeadingTag key={key}>
-          {node.children?.map((child, i) => renderNode(child, i))}
+          {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
         </HeadingTag>
       )
+    }
 
     case 'text':
       return <React.Fragment key={key}>{renderText(node.text || '', node.format)}</React.Fragment>
@@ -78,29 +88,30 @@ function renderNode(node: SerializedNode, index: number): React.ReactNode {
     case 'link':
       return (
         <a key={key} href={node.url} className="text-blue-600 hover:underline">
-          {node.children?.map((child, i) => renderNode(child, i))}
+          {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
         </a>
       )
 
-    case 'list':
+    case 'list': {
       const ListTag = node.listType === 'number' ? 'ol' : 'ul'
       return (
         <ListTag key={key}>
-          {node.children?.map((child, i) => renderNode(child, i))}
+          {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
         </ListTag>
       )
+    }
 
     case 'listitem':
       return (
         <li key={key}>
-          {node.children?.map((child, i) => renderNode(child, i))}
+          {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
         </li>
       )
 
     case 'quote':
       return (
         <blockquote key={key} className="border-l-4 border-gray-300 pl-4 italic">
-          {node.children?.map((child, i) => renderNode(child, i))}
+          {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
         </blockquote>
       )
 
@@ -108,7 +119,7 @@ function renderNode(node: SerializedNode, index: number): React.ReactNode {
       return (
         <pre key={key} className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
           <code>
-            {node.children?.map((child, i) => renderNode(child, i))}
+            {node.children?.map((child: SerializedNode, i: number) => renderNode(child, i))}
           </code>
         </pre>
       )
@@ -140,7 +151,7 @@ function renderNode(node: SerializedNode, index: number): React.ReactNode {
       if (node.children) {
         return (
           <div key={key}>
-            {node.children.map((child, i) => renderNode(child, i))}
+            {node.children.map((child: SerializedNode, i: number) => renderNode(child, i))}
           </div>
         )
       }

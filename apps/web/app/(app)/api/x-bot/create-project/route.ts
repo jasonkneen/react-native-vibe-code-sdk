@@ -20,7 +20,7 @@ const githubService = new GitHubService({
 })
 
 // E2B template IDs
-const TEMPLATE_ID = 'sm3r39vktkmu37lna0qa' // expo template
+const TEMPLATE_ID = 'a3lmq9qc4tpctk5654yv' // expo template
 
 // Secret key for x-bot internal calls
 const X_BOT_SECRET = process.env.X_BOT_SECRET

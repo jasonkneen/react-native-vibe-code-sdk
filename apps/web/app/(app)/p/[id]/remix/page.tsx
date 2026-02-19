@@ -13,7 +13,7 @@ export default function RemixPageWrapper() {
   return (
     <RemixPage
       projectId={projectId}
-      session={session}
+      session={session ? { ...session, user: { ...session.user, image: session.user?.image ?? undefined } } : null}
       isSessionLoading={isSessionLoading}
       onSignIn={(callbackUrl) => signInWithGoogle(callbackUrl)}
       onNavigate={(path) => router.push(path)}

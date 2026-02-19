@@ -1,6 +1,7 @@
 {
   "extends": "@react-native-vibe-code/tsconfig/nextjs.json",
   "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2024"],
     "paths": {
       "@/*": ["./*"],
       "@payload-config": ["./payload.config.ts"]

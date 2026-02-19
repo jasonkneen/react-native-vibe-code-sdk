@@ -253,9 +253,9 @@ export async function POST(req: Request) {
   //   console.log('userID', userID)
 
   // Create React Native Expo sandbox
-  const sbx = await Sandbox.create('sm3r39vktkmu37lna0qa', {
+  const sbx = await Sandbox.create('a3lmq9qc4tpctk5654yv', {
     metadata: {
-      template: 'sm3r39vktkmu37lna0qa',
+      template: 'a3lmq9qc4tpctk5654yv',
       userID: userID ?? '',
       teamID: teamID ?? '',
     },

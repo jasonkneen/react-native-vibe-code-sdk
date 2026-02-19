@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
         createdAt: new Date(),
         updatedAt: new Date(),
       })
+      .onConflictDoUpdate({
+        target: projects.id,
+        set: {
+          title,
+          updatedAt: new Date(),
+        },
+      })
       .returning()
 
     return new Response(JSON.stringify({ project: newProject[0] }), { headers: corsHeaders })

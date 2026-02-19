@@ -175,7 +175,7 @@ export async function POST(req: Request) {
   if (!sbx) {
     const templateId =
       fragment.template === 'react-native-expo'
-        ? 'sm3r39vktkmu37lna0qa'
+        ? 'a3lmq9qc4tpctk5654yv'
         : fragment.template
 
     sbx = await Sandbox.create(templateId, {
@@ -412,7 +412,7 @@ export async function POST(req: Request) {
     globalFileWatcher.startWatching(
       project.id,
       sbx,
-      (event) => {
+      (event: any) => {
         console.log(`📝 [Sandbox] File change detected for project ${project.id}:`, event)
         globalFileChangeStream.broadcastFileChange(event).catch(err => 
           console.error('Error broadcasting file change:', err)

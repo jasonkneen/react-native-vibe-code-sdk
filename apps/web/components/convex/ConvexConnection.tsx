@@ -197,7 +197,7 @@ export function ConvexConnection({ projectId }: ConvexConnectionProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="md" className="gap-2">
+        <Button variant="ghost" size="default" className="gap-2">
           <img src="/icons/convex.svg" alt="Convex" className="h-4 w-4" />
           {status?.connected ? 'Convex Connected' : 'Convex Connected'}
         </Button>

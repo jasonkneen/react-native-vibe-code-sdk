@@ -50,7 +50,7 @@ export async function DELETE(request: NextRequest) {
     if (polarCustomerId) {
       try {
         console.log(`[Delete Account] Deleting Polar customer: ${polarCustomerId}`)
-        await polarClient.customers.delete(polarCustomerId)
+        await polarClient.customers.delete(polarCustomerId as any)
         console.log(`[Delete Account] Successfully deleted Polar customer: ${polarCustomerId}`)
       } catch (polarError) {
         // Log but don't fail the entire deletion if Polar deletion fails

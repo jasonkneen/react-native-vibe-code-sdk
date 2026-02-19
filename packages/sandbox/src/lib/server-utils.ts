@@ -171,23 +171,23 @@ export async function startExpoServer(
     }
   }
 
-  // Configure ngrok auth token
-  console.log('[Server Utils] Configuring ngrok auth token...')
-  try {
-    await sandbox.commands.run(
-      `ngrok config add-authtoken ${process.env.NGROK_AUTHTOKEN}`,
-      {
-        onStdout: (data: string) => {
-          console.log('[Server Utils] NGROK CONFIG STDOUT:', data)
+  // Configure ngrok auth token (only if available)
+  if (process.env.NGROK_AUTHTOKEN) {
+    console.log('[Server Utils] Configuring ngrok auth token...')
+    try {
+      await sandbox.commands.run(
+        `ngrok config add-authtoken ${process.env.NGROK_AUTHTOKEN}`,
+        {
+          onStdout: (data: string) => console.log('[Server Utils] NGROK CONFIG STDOUT:', data),
+          onStderr: (data: string) => console.log('[Server Utils] NGROK CONFIG STDERR:', data),
         },
-        onStderr: (data: string) => {
-          console.log('[Server Utils] NGROK CONFIG STDERR:', data)
-        },
-      },
-    )
-    console.log('[Server Utils] Ngrok configured successfully')
-  } catch (error) {
-    console.log('[Server Utils] Failed to configure ngrok:', error)
+      )
+      console.log('[Server Utils] Ngrok configured successfully')
+    } catch (error) {
+      console.log('[Server Utils] Failed to configure ngrok:', error)
+    }
+  } else {
+    console.log('[Server Utils] No NGROK_AUTHTOKEN — skipping ngrok, using E2B direct URL')
   }
 
   // Verify bun is available (should be system-wide from imbios/bun-node image)
@@ -200,8 +200,12 @@ export async function startExpoServer(
   }
 
   // Start the web server in background
-  // Build the command with ngrok domain using sandbox ID
-  const startCommand = `cd /home/user/app && CI=false bun install && bun run start -- --ngrokurl ${ngrokDomain} --tunnel --web`
+  // Build the command — only use ngrok tunnel if NGROK_AUTHTOKEN is configured
+  const useNgrok = !!process.env.NGROK_AUTHTOKEN
+  const startCommand = useNgrok
+    ? `cd /home/user/app && CI=false bun install && bun run start -- --ngrokurl ${ngrokDomain} --tunnel --web`
+    : `cd /home/user/app && CI=false bun install && bun run start -- --web`
+  console.log('[Server Utils] Ngrok enabled:', useNgrok)
 
   console.log('[Server Utils] Starting with command:', startCommand)
 

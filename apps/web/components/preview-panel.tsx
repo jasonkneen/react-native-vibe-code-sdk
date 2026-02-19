@@ -18,6 +18,8 @@ import {
 import { useQRCode } from 'next-qrcode'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore – .tsx extension import is required to target use-mobile.tsx (not use-mobile.ts)
 import { useIsMobile } from '@/hooks/use-mobile.tsx'
 import { useLocalStorage } from '@/hooks/use-local-storage'
 import { Tabs, Tab } from '@heroui/tabs'
@@ -148,7 +150,7 @@ export function PreviewPanel({
     setIsRestartingServer(true)
 
     try {
-      const userID = localStorage.getItem('userId')
+      const userID = userId || localStorage.getItem('userId')
 
       const response = await fetch('/api/restart-server', {
         method: 'POST',
@@ -168,6 +170,17 @@ export function PreviewPanel({
         // console.log('[PreviewPanel] Server restarted successfully')
         toast.success('Server restarted successfully')
         setIsServerDown(false)
+
+        // If the sandbox was recreated, propagate the new IDs to the parent
+        if (data.wasRecreated && data.sandboxId && onProjectUpdate && currentProject) {
+          console.log('[PreviewPanel] Sandbox was resurrected, updating project state:', data.sandboxId)
+          onProjectUpdate({
+            ...currentProject,
+            sandboxId: data.sandboxId,
+            sandboxUrl: data.url,
+            ngrokUrl: data.ngrokUrl,
+          })
+        }
 
         // Reload the iframe after a short delay
         setTimeout(() => {
@@ -523,7 +536,7 @@ export function PreviewPanel({
             if (!expoServerAlive && !isServerDown) {
               setIsServerDown(true)
               // Auto-restart only on first detection
-              if (!isRestartingServer && projectId && sandboxId) {
+              if (!isRestartingServer && projectId && sandboxId && userId) {
                 handleRestartServer()
               }
             } else if (expoServerAlive && isServerDown) {

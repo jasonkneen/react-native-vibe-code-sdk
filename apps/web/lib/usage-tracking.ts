@@ -10,4 +10,11 @@ export {
   getUserUsageMetrics,
 } from '@react-native-vibe-code/payments/server'
 
-export type { UsageEvent } from '@react-native-vibe-code/payments'
+export interface UsageEvent {
+  name: string
+  externalCustomerId: string
+  metadata: {
+    [key: string]: any
+  }
+  timestamp?: Date
+}

@@ -137,7 +137,7 @@ function SidebarNav({
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {menuItems.map((item) => (
-                <SidebarMenuItem key={item.id} className={item.spacer && 'border-t-1 border-gray-300 pt-2 mt-2'}>
+                <SidebarMenuItem key={item.id} className={item.spacer ? 'border-t-1 border-gray-300 pt-2 mt-2' : undefined}>
                   <SidebarMenuButton
                     tooltip={item.label}
                     isActive={activePanel === item.id}
@@ -348,6 +348,7 @@ export function AppSidebar({
 
           {/* Panel overlay area - positioned relative to content area */}
           <PanelContent
+            isBottomOption={false}
             isOpen={activePanel === "assets"}
             isFirstOpen={isFirstOpen}
             isSwitching={isSwitching}
@@ -361,6 +362,7 @@ export function AppSidebar({
           </PanelContent>
 
           <PanelContent
+            isBottomOption={false}
             isOpen={activePanel === "projects"}
             isFirstOpen={isFirstOpen}
             isSwitching={isSwitching}
@@ -373,6 +375,7 @@ export function AppSidebar({
           </PanelContent>
 
           <PanelContent
+            isBottomOption={false}
             isOpen={activePanel === "backend"}
             isFirstOpen={isFirstOpen}
             isSwitching={isSwitching}

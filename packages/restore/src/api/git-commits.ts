@@ -4,11 +4,19 @@ import type { GitCommitsRequest, GitCommitsResponse, Commit } from '../types'
 
 export const maxDuration = 30
 
+/** Optional dependency-injection for the sandbox connection step */
+export type ConnectFn = (sandboxId: string) => Promise<Sandbox>
+
 /**
- * Fetch git commit history from sandbox
+ * Fetch git commit history from sandbox.
+ *
+ * @param request    - Standard GitCommitsRequest payload
+ * @param connectFn  - Optional custom connect function (e.g. for self-healing recovery).
+ *                     Defaults to `Sandbox.connect`.
  */
 export async function getGitCommits(
-  request: GitCommitsRequest
+  request: GitCommitsRequest,
+  connectFn?: ConnectFn,
 ): Promise<GitCommitsResponse> {
   const { projectId, userID, sandboxId } = request
 
@@ -51,10 +59,11 @@ export async function getGitCommits(
     }
   }
 
-  // Connect to sandbox
+  // Connect to sandbox (using injected fn when provided – enables self-healing recovery)
+  const resolvedConnectFn: ConnectFn = connectFn ?? ((id) => Sandbox.connect(id) as Promise<Sandbox>)
   let sandbox: Sandbox
   try {
-    sandbox = await Sandbox.connect(sandboxId)
+    sandbox = await resolvedConnectFn(sandboxId)
     console.log(`[Git Commits] Connected to sandbox: ${sandbox.sandboxId}`)
   } catch (error) {
     console.error(

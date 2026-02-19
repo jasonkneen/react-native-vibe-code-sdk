@@ -1,11 +1,7 @@
-import { db } from '@/lib/db'
-import { projects } from '@react-native-vibe-code/database'
-import { Sandbox } from '@e2b/code-interpreter'
-import { eq } from 'drizzle-orm'
+import { db, projects, eq } from '@/lib/db'
 import { globalFileWatcher } from '@/lib/sandbox-file-watcher'
 import { globalFileChangeStream } from '@/lib/file-change-stream'
-
-const sandboxTimeout = parseInt(process.env.E2B_SANDBOX_TIMEOUT_MS || '3600000') // Use env var, default to 1 hour
+import { connectWithRecovery } from '@/lib/sandbox-recovery'
 
 export const maxDuration = 120
 
@@ -78,30 +74,22 @@ export async function POST(req: Request) {
   }
 
   try {
-    // console.log(
-      // '🔌 [Sandbox Structure] Attempting to connect to sandbox:',
-    //   sandboxId,
-    // )
-
-    // Connect to existing sandbox
+    // Connect to existing sandbox (with automatic resurrection if dead)
     let sbx
     try {
-      sbx = await Sandbox.connect(sandboxId)
+      // We need a userId for recovery; sandbox-structure doesn't always receive one,
+      // so we fall back to a best-effort lookup via projectId only when userId is absent.
+      const recoveryResult = await connectWithRecovery(sandboxId, projectId, '', {
+        startExpo: false,
+      })
+      sbx = recoveryResult.sandbox
       // console.log('✅ [Sandbox Structure] Successfully connected to sandbox')
-
-      // File watcher is now handled by dedicated /api/file-watch endpoint
-      // console.log(`ℹ️ [Sandbox Structure] File watching handled by dedicated endpoint`)
-    } catch (sandboxError: any) {
-      // console.log(
-        // '❌ [Sandbox Structure] Failed to connect to sandbox:',
-        // sandboxError,
-      // )
-
+    } catch (sandboxError: unknown) {
+      const err = sandboxError as { message?: string; status?: number }
       if (
-        sandboxError.message?.includes('not found') ||
-        sandboxError.status === 404
+        err.message?.includes('not found') ||
+        err.status === 404
       ) {
-        // console.log('📋 [Sandbox Structure] Sandbox not found, returning 404')
         return new Response(
           JSON.stringify({
             error: 'Sandbox not found or expired',

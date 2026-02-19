@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
 
     // Create .env.local file with Convex URL for the client-side (EXPO_PUBLIC_ prefix for Expo apps)
     const { updateSandboxEnvFile } = await import('@/lib/convex/sandbox-utils')
-    await updateSandboxEnvFile(sandbox, 'EXPO_PUBLIC_CONVEX_URL', credentials.deploymentUrl)
+    await updateSandboxEnvFile(sandbox, 'EXPO_PUBLIC_CONVEX_URL', credentials.deploymentUrl!)
 
     // Start convex dev in background (long-running process)
     // Set CONVEX_DEPLOY_KEY environment variable to run non-interactively

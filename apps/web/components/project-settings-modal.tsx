@@ -14,9 +14,10 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
-import { GitFork, Globe, Lock, AlertCircle, Crown, ExternalLink } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { GitFork, Globe, Lock, AlertCircle, Crown, ExternalLink, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 import { useSubscriptionStatus } from '@/lib/polar-client'
 
 interface TwitterLinkStatus {
@@ -47,7 +48,36 @@ export function ProjectSettingsModal({
   const [isPublic, setIsPublic] = useState(initialIsPublic)
   const [isSaving, setIsSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const router = useRouter()
   const { isProSubscriber, isLoading: isLoadingSubscription } = useSubscriptionStatus()
+
+  async function handleDeleteProject() {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true)
+      confirmTimerRef.current = setTimeout(() => setConfirmingDelete(false), 4000)
+      return
+    }
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+    if (!projectId || !userID) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}?userID=${userID}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json()
+        throw new Error(body.error || 'Delete failed')
+      }
+      toast.success('Project deleted')
+      onOpenChange(false)
+      router.push('/')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete project')
+      setIsDeleting(false)
+      setConfirmingDelete(false)
+    }
+  }
   const isFreeUser = !isLoadingSubscription && !isProSubscriber
 
   // Twitter linking state
@@ -360,20 +390,32 @@ export function ProjectSettingsModal({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-row items-center justify-between sm:justify-between">
           <Button
-            variant="outline"
-            onClick={handleCancel}
-            disabled={isSaving}
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteProject}
+            disabled={isDeleting}
+            className="gap-1.5"
           >
-            Cancel
+            <Trash2 className="h-3.5 w-3.5" />
+            {isDeleting ? 'Deleting…' : confirmingDelete ? 'Click again to confirm' : 'Delete Project'}
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!hasChanges || isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

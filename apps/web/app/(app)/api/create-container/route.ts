@@ -135,13 +135,13 @@ async function setupConvex(params: {
   if (existingCredentials) {
     console.log('[Create Container] Convex already connected, using existing credentials')
     // Write existing URL to sandbox env
-    await writeConvexUrlToSandbox(params.sandbox, existingCredentials.deploymentUrl)
+    await writeConvexUrlToSandbox(params.sandbox, existingCredentials.deploymentUrl!)
     // Start dev server with existing credentials
     await startConvexDevServer({
       projectId: params.projectId,
       sandbox: params.sandbox,
-      adminKey: existingCredentials.adminKey,
-      deploymentUrl: existingCredentials.deploymentUrl,
+      adminKey: existingCredentials.adminKey!,
+      deploymentUrl: existingCredentials.deploymentUrl!,
     })
     return
   }
@@ -275,7 +275,7 @@ interface CreateContainerRequest {
   firstMessage?: UIMessage // First user message to generate fantasy name
 }
 
-export async function POST(req: NextRequest) {
+export async function createContainer(req: CreateContainerRequest) {
   try {
     const {
       projectId,
@@ -284,9 +284,9 @@ export async function POST(req: NextRequest) {
       template = 'react-native-expo',
       chooseTemplate,
       firstMessage,
-    }: CreateContainerRequest = await req.json()
+    } = req
 
-    console.log('Create Container API called with:', {
+    console.log('Create Container called with:', {
       projectId,
       userID,
       template,
@@ -295,11 +295,11 @@ export async function POST(req: NextRequest) {
     })
 
     if (!userID) {
-      return Response.json({ error: 'User ID is required' }, { status: 400 })
+      return { success: false, error: 'User ID is required', status: 400 }
     }
 
     if (!projectId) {
-      return Response.json({ error: 'Project ID is required' }, { status: 400 })
+      return { success: false, error: 'Project ID is required', status: 400 }
     }
 
     // Check if project already exists with active sandbox
@@ -344,25 +344,14 @@ export async function POST(req: NextRequest) {
             // Restore Convex environment variables from database
             await restoreConvexEnvToSandbox(sandbox, project.id)
 
-            // Schedule pause job for 25 minutes from now
-            // await inngest.send({
-            //   name: 'container/pause.scheduled',
-            //   data: {
-            //     projectId: project.id,
-            //     userID: userID,
-            //     sandboxId: sandbox.sandboxId,
-            //   },
-            //   ts: Date.now() + 25 * 60 * 1000, // 25 minutes from now
-            // })
-
-            return Response.json({
+            return {
               success: true,
               sandboxId: sandbox.sandboxId,
               projectId: project.id,
               projectTitle: project.title,
               template: project.template,
               isNew: false,
-            })
+            }
           } catch (error) {
             console.log(`Failed to connect to sandbox ${project.sandboxId}:`, error)
             // Continue to create new sandbox
@@ -375,7 +364,7 @@ export async function POST(req: NextRequest) {
     }
 
     const templateId = {
-      expo: 'sm3r39vktkmu37lna0qa',
+      expo: 'a3lmq9qc4tpctk5654yv',
       tamagui: '10aeyh6gcn9lmorirs2z',
       'expo-testing': 'wxe2y93k4kafhbwqg2br'
     }
@@ -589,34 +578,27 @@ export async function POST(req: NextRequest) {
       // Don't fail the entire request if config update fails
     }
 
-    // Schedule pause job for 25 minutes from now
-    // await inngest.send({
-    //   name: 'container/pause.scheduled',
-    //   data: {
-    //     projectId: project.id,
-    //     userID: userID,
-    //     sandboxId: sandbox.sandboxId,
-    //   },
-    //   ts: Date.now() + 25 * 60 * 1000, // 25 minutes from now
-    // })
-
-    return Response.json({
+    return {
       success: true,
       sandboxId: sandbox.sandboxId,
       projectId: project.id,
       projectTitle: project.title,
       template: project.template,
       isNew: true,
-    })
+    }
   } catch (error) {
-    console.error('Error in Create Container API:', error)
+    console.error('Error in Create Container:', error)
 
-    return Response.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
-      },
-      { status: 500 },
-    )
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error',
+      status: 500,
+    }
   }
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json()
+  const result = await createContainer(body)
+  return Response.json(result, { status: result.status || 200 })
 }

@@ -3,6 +3,12 @@
 import { createAuthClient } from 'better-auth/react'
 import { polarClient } from '@polar-sh/better-auth'
 
+// Only load Polar plugin when configured server-side
+const isPolarEnabled = !!(
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_POLAR_PRO_PRODUCT_ID
+)
+
 // Get base URL - must match server configuration
 const getBaseURL = () => {
   // Check if we're in the browser
@@ -23,11 +29,21 @@ export const authClient = createAuthClient({
     onError(e) {
       if (e.error.status === 429) {
         console.error('Too many requests. Please try again later.')
+        return
       }
-      console.error('Auth error details:', e)
+      // 404s from Polar subscription check (/api/auth/customer/state) are expected
+      // when POLAR_ACCESS_TOKEN is not configured — suppress them silently
+      if (e.error.status === 404) {
+        return
+      }
+      console.error('Auth error details:', {
+        status: e.error.status,
+        message: e.error.message,
+        statusText: e.error.statusText,
+      })
     },
   },
-  plugins: [polarClient()],
+  plugins: isPolarEnabled ? [polarClient()] : [],
 })
 
 // Export commonly used methods for convenience

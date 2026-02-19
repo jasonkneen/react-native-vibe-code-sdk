@@ -375,7 +375,7 @@ export function ChatInput({
               <div className="absolute top-0 left-0 pointer-events-none z-0 px-3 pt-2">
                 <div className="absolute -right-[-8px] w-[10px] h-[23px] bg-white dark:bg-primary-foreground"/>
                 <ReactPlaceholderTyping
-                  placeholders={["describe any type of app idea you have...               ", "create that app you always thought of...                "]}
+                  content={["describe any type of app idea you have...               ", "create that app you always thought of...                "]}
                   containerStyle={{border: 'none', background: 'transparent', padding: 0}}
                   inputStyle={{
                     width: editorWidth - 24,

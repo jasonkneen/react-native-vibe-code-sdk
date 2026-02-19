@@ -37,7 +37,7 @@ export const ChatEditor = forwardRef<ChatEditorRef, ChatEditorProps>(
     const CustomSkillMention = Mention.extend({
       name: 'skillMention',
 
-      addOptions() {
+      addOptions(): any {
         return {
           ...this.parent?.(),
           HTMLAttributes: {
@@ -125,7 +125,7 @@ export const ChatEditor = forwardRef<ChatEditorRef, ChatEditorProps>(
     }).configure({
       suggestion: {
         ...skillSuggestion,
-        command: ({ editor, range, props }) => {
+        command: ({ editor, range, props }: { editor: any; range: any; props: any }) => {
           // Insert the skill mention node
           editor
             .chain()
@@ -150,7 +150,7 @@ export const ChatEditor = forwardRef<ChatEditorRef, ChatEditorProps>(
           window.dispatchEvent(new CustomEvent('skill-selected', { detail: props }))
         },
         render: () => {
-          const baseRender = skillSuggestion.render()
+          const baseRender = skillSuggestion.render!()
           return {
             onStart: (props: any) => {
               setIsSuggestionActive(true)
@@ -162,9 +162,9 @@ export const ChatEditor = forwardRef<ChatEditorRef, ChatEditorProps>(
             onKeyDown: (props: any) => {
               return baseRender.onKeyDown?.(props) ?? false
             },
-            onExit: () => {
+            onExit: (props: any) => {
               setIsSuggestionActive(false)
-              baseRender.onExit?.()
+              baseRender.onExit?.(props)
             },
           }
         },

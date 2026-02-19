@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
         try {
           console.log('Verifying sandbox is still active:', sandboxId)
           const testSandbox = await Sandbox.connect(sandboxId)
-          await testSandbox.close() // Close immediately after verification
+          await (testSandbox as any).close() // Close immediately after verification
 
           console.log(
             'Server already running and sandbox active, returning existing URLs:',

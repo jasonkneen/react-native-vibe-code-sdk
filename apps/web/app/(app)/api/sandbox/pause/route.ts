@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 
     // Connect to the sandbox and pause it
     const sbx = await Sandbox.connect(project.sandboxId)
-    const pausedSandboxId = await sbx.pause()
+    const pausedSandboxId = await (sbx as any).pause()
 
     // Update project status to paused and server status to closed
     await db

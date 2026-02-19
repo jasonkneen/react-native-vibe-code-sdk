@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     try {
       // Use the same expo template as create-container for consistency
       const templateId = {
-        expo: 'sm3r39vktkmu37lna0qa',
+        expo: 'a3lmq9qc4tpctk5654yv',
         tamagui: '10aeyh6gcn9lmorirs2z',
       }
       const templateSelection: keyof typeof templateId = process.env.TEMPLATE_SELECTION as keyof typeof templateId || 'expo'
@@ -172,16 +172,20 @@ git pull origin main || git pull origin master || echo "No remote content to pul
       // Don't fail the entire recreation if Convex restore fails
     }
 
-    // Schedule pause job for 25 minutes from now
-    await inngest.send({
-      name: 'container/pause.scheduled',
-      data: {
-        projectId: project.id,
-        userID: userID,
-        sandboxId: sandbox.sandboxId,
-      },
-      ts: Date.now() + 25 * 60 * 1000, // 25 minutes from now
-    })
+    // Schedule pause job for 25 minutes from now (optional - requires inngest)
+    try {
+      await inngest.send({
+        name: 'container/pause.scheduled',
+        data: {
+          projectId: project.id,
+          userID: userID,
+          sandboxId: sandbox.sandboxId,
+        },
+        ts: Date.now() + 25 * 60 * 1000,
+      })
+    } catch (inngestError) {
+      console.log('[Recreate Container] Inngest not available, skipping pause schedule:', inngestError)
+    }
 
     // Start Expo server for React Native projects
     if (project.template === 'react-native-expo') {

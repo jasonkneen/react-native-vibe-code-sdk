@@ -47,13 +47,13 @@ export const Posts: CollectionConfig = {
     {
       name: 'author',
       type: 'relationship',
-      relationTo: 'authors',
+      relationTo: 'authors' as any,
       required: true,
     },
     {
       name: 'categories',
       type: 'relationship',
-      relationTo: 'categories',
+      relationTo: 'categories' as any,
       hasMany: true,
       admin: {
         description: 'Categories/tags for this post',

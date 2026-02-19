@@ -109,7 +109,7 @@ export const SkillMention = Mention.extend<SkillMentionOptions>({
 }).configure({
   suggestion: {
     ...skillSuggestion,
-    command: ({ editor, range, props }) => {
+    command: ({ editor, range, props }: { editor: any; range: any; props: any }) => {
       // Insert the skill mention node
       editor
         .chain()
@@ -134,4 +134,4 @@ export const SkillMention = Mention.extend<SkillMentionOptions>({
       window.dispatchEvent(new CustomEvent('skill-selected', { detail: props }))
     },
   },
-})
+} as any)

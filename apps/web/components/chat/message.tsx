@@ -87,7 +87,7 @@ const PureChatMessage = (props: ChatMessageProps) => {
       isRateLimitMessage={isRateLimitMessage}
       parseRateLimitData={parseRateLimitData}
       isClaudeCodeMessage={isClaudeCodeMessage}
-      getSkillById={getSkillById}
+      getSkillById={(id) => getSkillById(id) ?? null}
       renderRateLimitCard={({ reason, usageCount, messageLimit }) => (
         <RateLimitCard
           reason={reason}

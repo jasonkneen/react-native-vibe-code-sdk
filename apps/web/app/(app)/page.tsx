@@ -2,6 +2,8 @@ import { getServerSession } from '@/lib/auth/index'
 import { HomeClient } from '@/components/home-client'
 import { LandingFeaturesToggle } from '@/components/landing-features-toggle'
 
+export const dynamic = 'force-dynamic'
+
 export default async function Home() {
   const session = await getServerSession()
 

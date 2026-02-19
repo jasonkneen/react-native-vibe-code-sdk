@@ -16,7 +16,7 @@ async function getPublishedPosts() {
   const payload = await getPayload({ config: payloadConfig })
 
   const { docs: posts } = await payload.find({
-    collection: 'posts',
+    collection: 'posts' as any,
     where: {
       status: {
         equals: 'published',
@@ -34,7 +34,7 @@ async function getCategories() {
   const payload = await getPayload({ config: payloadConfig })
 
   const { docs: categories } = await payload.find({
-    collection: 'categories',
+    collection: 'categories' as any,
     depth: 0,
   })
 
@@ -46,7 +46,7 @@ async function getTrendingAuthors() {
   const payload = await getPayload({ config: payloadConfig })
 
   const { docs: authors } = await payload.find({
-    collection: 'authors',
+    collection: 'authors' as any,
     where: {
       trending: {
         equals: true,

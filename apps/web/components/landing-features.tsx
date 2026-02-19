@@ -381,16 +381,6 @@ export function LandingFeatures() {
                 <div className="absolute right-0 top-0 h-full w-12 bg-gradient-to-l from-card to-transparent pointer-events-none" />
               </div>
             </div>
-            <style jsx global>{`
-              @keyframes scroll-left {
-                0% { transform: translateX(0); }
-                100% { transform: translateX(-50%); }
-              }
-              @keyframes scroll-right {
-                0% { transform: translateX(-50%); }
-                100% { transform: translateX(0); }
-              }
-            `}</style>
           </BentoCard>
 
         </div>

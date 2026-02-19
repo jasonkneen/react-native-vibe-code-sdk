@@ -11,7 +11,7 @@ export async function POST() {
 
     // Create sandbox from the expo template using template ID
     sandbox = await Sandbox.create(
-      "sm3r39vktkmu37lna0qa",{
+      "a3lmq9qc4tpctk5654yv",{
       timeoutMs: 120000,
     });
 

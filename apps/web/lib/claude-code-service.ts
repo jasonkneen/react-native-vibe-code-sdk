@@ -82,7 +82,7 @@ export class ClaudeCodeService {
         const { getSkillConfigs } = await import('@/lib/skills/config')
         const skillConfigs = getSkillConfigs(request.skills)
 
-        const skillDescriptions = skillConfigs.map(skill =>
+        const skillDescriptions = skillConfigs.map((skill: any) =>
           `- ${skill.name}: ${skill.description}`
         ).join('\n')
 

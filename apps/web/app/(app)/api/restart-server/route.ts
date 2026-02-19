@@ -1,9 +1,7 @@
-import { db } from '@/lib/db'
-import { projects } from '@react-native-vibe-code/database'
+import { db, projects, eq, and } from '@/lib/db'
 import { startExpoServer } from '@/lib/server-utils'
-import { Sandbox } from '@e2b/code-interpreter'
-import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
+import { connectWithRecovery } from '@/lib/sandbox-recovery'
 
 export const maxDuration = 120
 
@@ -57,57 +55,56 @@ export async function POST(req: NextRequest) {
       `[Restart Server] Found project: ${project.id} with sandbox: ${project.sandboxId}`,
     )
 
-    if (project.sandboxId !== sandboxId) {
-      return Response.json(
-        { error: 'Sandbox ID mismatch' },
-        { status: 400 },
-      )
-    }
+    // Note: we allow sandboxId mismatch here since recovery may have already updated it;
+    // the client may be sending the old ID. We proceed with recovery either way.
 
-    let sandbox: Sandbox | null = null
+    // ── Connect (with auto-resurrection) ─────────────────────────────────
+    const { sandbox, wasRecreated, newSandboxId, newUrl: recoveryUrl, newNgrokUrl: recoveryNgrokUrl } =
+      await connectWithRecovery(sandboxId, projectId, userID, { startExpo: false })
 
-    // Try to connect to the existing sandbox
-    try {
-      sandbox = await Sandbox.connect(sandboxId)
+    if (wasRecreated) {
+      console.log(`[Restart Server] Sandbox was resurrected as ${newSandboxId}`)
+    } else {
       console.log(`[Restart Server] Connected to sandbox: ${sandbox.sandboxId}`)
-    } catch (error) {
-      console.log(`[Restart Server] Failed to resume sandbox ${sandboxId}:`, error)
-      return Response.json(
-        {
-          error: 'Failed to resume sandbox',
-          details: error instanceof Error ? error.message : 'Unknown error',
-        },
-        { status: 500 },
-      )
     }
 
-    // First, kill any existing Expo and ngrok processes
+    // ── Kill existing Expo / ngrok / watchman processes ───────────────────
     console.log('[Restart Server] Killing existing Expo and ngrok processes...')
     try {
-      await sandbox.commands.run(
-        'pkill -f "expo start" || true',
-        { timeoutMs: 5000 }
-      )
-      await sandbox.commands.run(
-        'pkill -f "watchman" || true',
-        { timeoutMs: 5000 }
-      )
-      await sandbox.commands.run(
-        'pkill -f "ngrok" || true',
-        { timeoutMs: 5000 }
-      )
-      // Wait a bit for processes to clean up
+      await sandbox.commands.run('pkill -f "expo start" || true', { timeoutMs: 5000 })
+      await sandbox.commands.run('pkill -f "watchman" || true', { timeoutMs: 5000 })
+      await sandbox.commands.run('pkill -f "ngrok" || true', { timeoutMs: 5000 })
       await new Promise(resolve => setTimeout(resolve, 2000))
-    } catch (error) {
-      console.log('[Restart Server] Error killing processes (non-fatal):', error)
+    } catch (killError) {
+      console.log('[Restart Server] Error killing processes (non-fatal):', killError)
     }
 
-    // Start Expo server for React Native projects
-    if (project.template === 'react-native-expo') {
+    // ── Check if port 8081 is already listening ───────────────────────────
+    let expoRunning = false
+    try {
+      const portCheck = await sandbox.commands.run(
+        'ss -tlnp 2>/dev/null | grep -q ":8081" && echo "LISTENING" || echo "NOT_LISTENING"',
+        { timeoutMs: 5000 },
+      )
+      expoRunning = portCheck.stdout.trim() === 'LISTENING'
+      console.log(`[Restart Server] Port 8081 check: ${expoRunning ? 'LISTENING' : 'NOT_LISTENING'}`)
+    } catch (portCheckError) {
+      console.log('[Restart Server] Port check failed (non-fatal):', portCheckError)
+    }
+
+    // ── Start Expo if needed ──────────────────────────────────────────────
+    const isExpoTemplate =
+      project.template === 'react-native-expo' ||
+      project.template === 'expo' ||
+      project.template === 'tamagui'
+
+    if (isExpoTemplate || !expoRunning) {
       try {
-        console.log('[Restart Server] Starting Expo server...')
+        console.log(
+          `[Restart Server] Starting Expo server (template=${project.template}, expoRunning=${expoRunning})...`,
+        )
         const serverResult = await startExpoServer(sandbox, project.id)
-        
+
         return Response.json({
           success: true,
           projectId: project.id,
@@ -117,29 +114,35 @@ export async function POST(req: NextRequest) {
           ngrokUrl: serverResult.ngrokUrl,
           serverReady: serverResult.serverReady,
           restarted: true,
+          wasRecreated,
+          ...(wasRecreated ? { newSandboxId: sandbox.sandboxId } : {}),
         })
-      } catch (error) {
-        console.log('[Restart Server] Error starting Expo server:', error)
+      } catch (expoError) {
+        console.error('[Restart Server] Error starting Expo server:', expoError)
         return Response.json(
           {
             success: false,
             error: 'Failed to restart server',
-            details: error instanceof Error ? error.message : 'Unknown error',
+            details: expoError instanceof Error ? expoError.message : 'Unknown error',
           },
           { status: 500 },
         )
       }
     }
 
-    // For non-React Native projects
+    // ── Non-Expo project with port already listening ──────────────────────
+    const host = sandbox.getHost(8081)
     return Response.json({
       success: true,
       projectId: project.id,
       projectTitle: project.title,
       sandboxId: sandbox.sandboxId,
-      url: `https://${sandbox.getHost(8081)}`,
-      serverReady: false,
+      url: recoveryUrl ?? `https://${host}`,
+      ngrokUrl: recoveryNgrokUrl,
+      serverReady: expoRunning,
       restarted: true,
+      wasRecreated,
+      ...(wasRecreated ? { newSandboxId: sandbox.sandboxId } : {}),
     })
   } catch (error) {
     console.error('[Restart Server] Error in API:', error)

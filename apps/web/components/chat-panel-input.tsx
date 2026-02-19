@@ -110,8 +110,8 @@ export const ChatPanelInput = memo(function ChatPanelInput({
   // Check if realtime voice is enabled (true = Deepgram live, false = Whisper)
   const useRealtimeVoice = process.env.NEXT_PUBLIC_REALTIME_VOICE === 'true'
   
-  const captionTimeout = useRef<any>()
-  const keepAliveInterval = useRef<any>()
+  const captionTimeout = useRef<any>(null)
+  const keepAliveInterval = useRef<any>(null)
   const baseInputRef = useRef<string>('')
   const recordSoundRef = useRef<HTMLAudioElement | null>(null)
   

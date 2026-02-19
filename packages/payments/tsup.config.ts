@@ -11,7 +11,13 @@ export default defineConfig({
     "src/types/index.ts",
   ],
   format: ["cjs", "esm"],
-  dts: true,
+  dts: {
+    // Force skipLibCheck so duplicate @types/react paths across pnpm's isolated
+    // node_modules don't cause spurious "ReactNode/bigint" type mismatches
+    compilerOptions: {
+      skipLibCheck: true,
+    },
+  },
   clean: true,
   sourcemap: true,
   splitting: false,

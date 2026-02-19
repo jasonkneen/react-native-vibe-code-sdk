@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       return Response.json(
         {
           isRunning: false,
-          needsResume: false,
+          needsResume: true,
           error: 'No sandbox found for project'
         },
         { status: 200 },

@@ -116,8 +116,10 @@ function ProjectPageInternal() {
     errorModalData,
     handleCloseModal: handleCloseErrorModal,
     handleSendToFix: handleSendToFixFromModal
-  } = useErrorNotifications(projectId || null, (errorMessage: string) => {
-    handleSendToFixRef.current?.(errorMessage)
+  } = useErrorNotifications(projectId || null, {
+    onSendToFix: (errorMessage: string) => {
+      handleSendToFixRef.current?.(errorMessage)
+    },
   })
 
   // Expose project ID globally for search functionality
@@ -385,7 +387,7 @@ function ProjectPageInternal() {
     recoveryCount: streamRecoveryCount,
     triggerRecovery: triggerStreamRecovery,
   } = useStreamRecovery({
-    messages,
+    messages: messages.filter(m => m.role !== 'data') as any,
     status: streamStatus,
     isLoading: isChatLoading,
     projectId: projectId || null,
@@ -504,11 +506,7 @@ function ProjectPageInternal() {
     // When backup server starts successfully, update the preview URL
     onBackupServerReady: (newSandboxUrl, newNgrokUrl) => {
       console.log('[Project] Backup server ready, updating preview URL:', newSandboxUrl)
-      setResult(prev => ({
-        ...prev,
-        url: newSandboxUrl,
-        ngrokUrl: newNgrokUrl,
-      }))
+      setResult(prev => prev ? { ...prev, url: newSandboxUrl, ngrokUrl: newNgrokUrl } : prev)
       // Force preview to reload with new URL
       setPreviewKey(prev => prev + 1)
     },
@@ -953,6 +951,12 @@ function ProjectPageInternal() {
               sandboxStartTimeRef.current = new Date()
               console.log('[Server Check] Reset sandbox start time to now:', sandboxStartTimeRef.current)
 
+              // Update currentProject.sandboxId in state so other effects see the new ID
+              if (result.sandboxId && result.sandboxId !== currentProject.sandboxId) {
+                console.log('[Server Check] Updating currentProject.sandboxId to:', result.sandboxId)
+                setCurrentProject(prev => prev ? { ...prev, sandboxId: result.sandboxId } : prev)
+              }
+
               // Update result with fresh URLs
               setResult({
                 url: result.url,
@@ -962,6 +966,8 @@ function ProjectPageInternal() {
                 projectTitle: currentProject.title,
                 template: currentProject.template as any,
               })
+            } else {
+              console.error('[Server Check] resume-container returned failure:', result.error)
             }
           } catch (error) {
             console.error('[Server Check] Error resuming container:', error)
@@ -1696,6 +1702,11 @@ function ProjectPageInternal() {
             setTimeout(() => {
               searchService.cacheProjectFiles(projectId).catch(console.error)
             }, 3000) // Wait 3 seconds for container to be ready
+          } else if (data.project && !data.project.sandboxId) {
+            // Project exists but has no sandbox yet — create one now so the
+            // CodePanel stops getting 404 from /api/sandbox-structure
+            console.log('[LoadProject] No sandboxId on project, creating container...')
+            await createContainer(data.project)
           }
         }
       } else if (response.status === 404 && firstMessage) {
@@ -2552,13 +2563,14 @@ function ProjectPageInternal() {
         <UserSettingsModal
           open={isUserSettingsModalOpen}
           onOpenChange={setIsUserSettingsModalOpen}
+          userEmail={session?.user?.email || ''}
         />
         {projectId && session?.user?.id && (
           <ProjectSettingsModal
             open={isProjectSettingsModalOpen}
             onOpenChange={setIsProjectSettingsModalOpen}
             projectId={projectId}
-            userId={session.user.id}
+            userID={session.user.id}
           />
         )}
 

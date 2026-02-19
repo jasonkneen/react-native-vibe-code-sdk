@@ -499,7 +499,7 @@ export async function addCustomDomain(
     })
 
     console.log(`[Custom Domain] Successfully added ${customDomain}`)
-    console.log(`[Custom Domain] Status: ${result.status}`)
+    console.log(`[Custom Domain] Status: ${result?.status}`)
 
     // Step 4: NOW create CNAME to pages.dev AFTER domain is on Pages
     // The domain is now authorized, so the cross-account CNAME is allowed
@@ -514,7 +514,7 @@ export async function addCustomDomain(
     return {
       success: true,
       customDomain,
-      status: result.status as CustomDomainResult['status']
+      status: result?.status as CustomDomainResult['status']
     }
   } catch (error: any) {
     // Handle specific Cloudflare API errors

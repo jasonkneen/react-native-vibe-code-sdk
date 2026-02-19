@@ -1,5 +1,11 @@
 {
   "buildCommand": "pnpm turbo run build --filter=@react-native-vibe-code/web --force",
+  "crons": [
+    {
+      "path": "/api/cron/heal-sandboxes",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "installCommand": "pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",

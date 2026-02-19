@@ -30,4 +30,10 @@ export const pusherServer = {
   get instance() {
     return getPusherServer()
   },
+  trigger(...args: Parameters<Pusher['trigger']>) {
+    return getPusherServer().trigger(...args)
+  },
+  authorizeChannel(...args: Parameters<Pusher['authorizeChannel']>) {
+    return getPusherServer().authorizeChannel(...args)
+  },
 }

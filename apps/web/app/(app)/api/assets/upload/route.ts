@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     // Write to sandbox
     const targetPath = `${targetDir}/${file.name}`
-    await sandbox.files.write(targetPath, buffer)
+    await sandbox.files.write(targetPath, buffer.buffer as ArrayBuffer)
 
     // Update asset manifest in sandbox
     const manifestPath = "/home/user/app/assets/manifest.json"

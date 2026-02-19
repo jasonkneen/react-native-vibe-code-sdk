@@ -1,4 +1,5 @@
 import { getGitCommits } from '@react-native-vibe-code/restore/api'
+import { connectWithRecovery } from '@/lib/sandbox-recovery'
 import { NextRequest } from 'next/server'
 
 export const maxDuration = 30
@@ -12,11 +13,27 @@ const corsHeaders = {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const result = await getGitCommits(body)
+
+    // Build a self-healing connectFn that resurrects dead sandboxes before fetching commits
+    const { projectId, userID } = body as { projectId?: string; userID?: string }
+
+    const connectFn =
+      projectId && userID
+        ? (sandboxId: string) =>
+            connectWithRecovery(sandboxId, projectId, userID, { startExpo: false }).then(
+              (r) => r.sandbox,
+            )
+        : undefined
+
+    const result = await getGitCommits(body, connectFn)
 
     if (!result.success) {
-      const status = result.error === 'Project not found or access denied' ? 404 :
-                     result.error?.includes('required') ? 400 : 500
+      const status =
+        result.error === 'Project not found or access denied' ? 404 :
+        result.error?.includes('required') ? 400 :
+        result.error?.includes('connect to sandbox') ||
+        result.error?.includes('fetch commit history') ? 503 :
+        500
       return Response.json(
         { error: result.error, details: result.details },
         { status, headers: corsHeaders }

@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
         await globalFileWatcher.startWatching(
           projectId,
           sbx,
-          (event) => {
+          (event: any) => {
             if (connectionClosed) return
             
             // console.log(`📝 [FileWatch SSE] 🚨 FILE CHANGE DETECTED for project ${projectId}:`, event)

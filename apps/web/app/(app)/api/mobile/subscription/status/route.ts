@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { subscriptions, promptMessages } from '@react-native-vibe-code/database'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { auth } from '@/lib/auth/config'
 import { headers } from 'next/headers'
 import { CONFIG } from '@/lib/config'
@@ -37,16 +37,20 @@ export async function GET(req: NextRequest) {
     const [usage] = await db
       .select()
       .from(promptMessages)
-      .where(eq(promptMessages.userId, session.user.id))
-      .where(eq(promptMessages.month, currentMonth))
+      .where(
+        and(
+          eq(promptMessages.userId, session.user.id),
+          eq(promptMessages.month, currentMonth)
+        )
+      )
       .limit(1)
 
-    const currentUsage = parseInt(usage?.usageCount || '0')
+    const currentUsage = Number(usage?.usageCount || 0)
 
     // Determine message limit based on plan
     const messageLimit = subscription
-      ? parseInt(subscription.messageLimit || '0')
-      : parseInt(CONFIG.FREE_PLAN_MESSAGE_LIMIT)
+      ? Number(subscription.messageLimit ?? 0)
+      : Number(CONFIG.FREE_PLAN_MESSAGE_LIMIT)
 
     const status = {
       isActive: subscription?.status === 'active',

@@ -233,7 +233,7 @@ export async function POST(req: Request) {
         model: {
           specificationVersion: 'v1',
           // Custom streaming model that handles Claude Code streaming
-          doStream: async ({ prompt }) => {
+          doStream: async ({ prompt }: { prompt: any }) => {
             return {
               stream: new ReadableStream({
                 async start(controller) {

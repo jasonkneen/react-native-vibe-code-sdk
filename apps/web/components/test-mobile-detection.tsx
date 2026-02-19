@@ -1,9 +1,9 @@
 'use client'
 
-import { useIsMobile } from '@/hooks/use-mobile'
+import { useMobile } from '@/hooks/use-mobile'
 
 export function TestMobileDetection() {
-  const isMobile = useIsMobile()
+  const isMobile = useMobile()
   
   return (
     <div className="p-4 border rounded">

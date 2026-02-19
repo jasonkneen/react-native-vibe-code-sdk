@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { projects } from '@react-native-vibe-code/database'
+import { projects, chat } from '@react-native-vibe-code/database'
 import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { Sandbox } from '@e2b/code-interpreter'
@@ -83,16 +83,20 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
           })
           .where(eq(projects.id, project.id))
 
-        // Schedule pause job for 25 minutes from now
-        await inngest.send({
-          name: 'container/pause.scheduled',
-          data: {
-            projectId: project.id,
-            userID: userID,
-            sandboxId: sandbox.sandboxId,
-          },
-          ts: Date.now() + 25 * 60 * 1000, // 25 minutes from now
-        })
+        // Schedule pause job for 25 minutes from now (optional - requires inngest)
+        try {
+          await inngest.send({
+            name: 'container/pause.scheduled',
+            data: {
+              projectId: project.id,
+              userID: userID,
+              sandboxId: sandbox.sandboxId,
+            },
+            ts: Date.now() + 25 * 60 * 1000,
+          })
+        } catch (inngestError) {
+          console.log('[Projects] Inngest not available, skipping pause schedule:', inngestError)
+        }
 
         console.log(`Connected to sandbox ${sandbox.sandboxId} for project ${project.id}`)
 
@@ -247,5 +251,107 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       status: 500,
       headers: corsHeaders,
     })
+  }
+}
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
+  const { searchParams } = new URL(req.url)
+  const userID = searchParams.get('userID')
+
+  if (!userID) {
+    return new Response(JSON.stringify({ error: 'User ID is required' }), {
+      status: 400,
+      headers: corsHeaders,
+    })
+  }
+
+  try {
+    // Verify ownership
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.id, params.id), eq(projects.userId, userID)))
+      .limit(1)
+
+    if (!project) {
+      return new Response(JSON.stringify({ error: 'Project not found' }), {
+        status: 404,
+        headers: corsHeaders,
+      })
+    }
+
+    const errors: string[] = []
+
+    // 1. Kill the E2B sandbox if active
+    if (project.sandboxId) {
+      try {
+        const sbx = await Sandbox.connect(project.sandboxId)
+        await sbx.kill()
+        console.log(`[Delete] Killed E2B sandbox ${project.sandboxId}`)
+      } catch (e) {
+        // Sandbox may already be dead — log but don't block deletion
+        console.warn(`[Delete] Could not kill sandbox ${project.sandboxId}:`, e)
+      }
+    }
+
+    // 2. Delete Cloudflare Pages project if one was deployed
+    if (project.cloudflareProjectName) {
+      try {
+        const accountId = process.env.CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID
+        const apiToken = process.env.CF_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN
+        if (accountId && apiToken) {
+          const cfRes = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${project.cloudflareProjectName}`,
+            {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${apiToken}` },
+            }
+          )
+          if (!cfRes.ok) {
+            const body = await cfRes.text()
+            errors.push(`Cloudflare cleanup failed: ${cfRes.status} ${body}`)
+            console.warn(`[Delete] Cloudflare Pages delete failed for ${project.cloudflareProjectName}:`, body)
+          } else {
+            console.log(`[Delete] Deleted Cloudflare Pages project ${project.cloudflareProjectName}`)
+          }
+        }
+      } catch (e) {
+        errors.push(`Cloudflare cleanup error: ${e instanceof Error ? e.message : String(e)}`)
+        console.warn('[Delete] Cloudflare Pages delete error:', e)
+      }
+    }
+
+    // 3. Delete the associated chat record (cascades to messages)
+    if (project.chatId) {
+      try {
+        await db.delete(chat).where(eq(chat.id, project.chatId))
+        console.log(`[Delete] Deleted chat ${project.chatId}`)
+      } catch (e) {
+        errors.push(`Chat cleanup failed: ${e instanceof Error ? e.message : String(e)}`)
+        console.warn('[Delete] Chat delete error:', e)
+      }
+    }
+
+    // 4. Delete the project — cascades: convexProjectCredentials, commits, conversations, conversationMessages
+    await db.delete(projects).where(eq(projects.id, params.id))
+    console.log(`[Delete] Deleted project ${params.id}`)
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        projectId: params.id,
+        ...(errors.length > 0 ? { warnings: errors } : {}),
+      }),
+      { status: 200, headers: corsHeaders }
+    )
+  } catch (error) {
+    console.error('[Delete] Error deleting project:', error)
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to delete project',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      { status: 500, headers: corsHeaders }
+    )
   }
 }

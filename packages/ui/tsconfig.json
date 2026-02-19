@@ -2,7 +2,13 @@
   "extends": "@react-native-vibe-code/tsconfig/react-library.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "skipLibCheck": true,
+    "paths": {
+      "react": ["../../node_modules/@types/react"],
+      "react/jsx-runtime": ["../../node_modules/@types/react/jsx-runtime"],
+      "react/jsx-dev-runtime": ["../../node_modules/@types/react/jsx-dev-runtime"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

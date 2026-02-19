@@ -36,7 +36,9 @@ export default defineConfig({
     "components/use-toast": "src/components/use-toast.ts",
   },
   format: ["cjs", "esm"],
-  dts: true,
+  dts: {
+    compilerOptions: { skipLibCheck: true },
+  },
   clean: true,
   sourcemap: true,
   splitting: false,

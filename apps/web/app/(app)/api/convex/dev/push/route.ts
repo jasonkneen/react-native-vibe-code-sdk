@@ -50,11 +50,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get sandbox instance
+    if (!project.sandboxId) {
+      return NextResponse.json({ success: false, error: 'Project sandbox not found' }, { status: 404 })
+    }
     const sandbox = await Sandbox.connect(project.sandboxId)
 
     // Ensure .env.local has the credentials for the client-side (EXPO_PUBLIC_ prefix for Expo apps)
     const { updateSandboxEnvFile } = await import('@/lib/convex/sandbox-utils')
-    await updateSandboxEnvFile(sandbox, 'EXPO_PUBLIC_CONVEX_URL', credentials.deploymentUrl)
+    if (!credentials.deploymentUrl) {
+      return NextResponse.json({ success: false, error: 'Convex deployment URL not found' }, { status: 404 })
+    }
+    await updateSandboxEnvFile(sandbox, 'EXPO_PUBLIC_CONVEX_URL', credentials.deploymentUrl ?? '')
 
     // Push changes to Convex using the project deploy key
     // The deploy key format is: project:team:project|token

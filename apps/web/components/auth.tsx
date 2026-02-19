@@ -26,7 +26,8 @@ function GoogleIcon({ className }: { className?: string }) {
   )
 }
 
-const enableEmailAuth = process.env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH === 'true'
+// Show email auth by default; only show Google if explicitly configured
+const enableEmailAuth = process.env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH !== 'false'
 
 export default function Auth({ onSuccess, onError, callbackURL }: AuthProps) {
   const [loading, setLoading] = useState(false)

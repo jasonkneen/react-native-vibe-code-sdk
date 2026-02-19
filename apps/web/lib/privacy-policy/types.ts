@@ -26,6 +26,7 @@ export interface Question {
 }
 
 export interface PolicyAnswers {
+  [key: string]: unknown
   // App info
   app_name?: string
   company_name?: string

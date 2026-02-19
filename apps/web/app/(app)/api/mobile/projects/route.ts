@@ -82,20 +82,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Import dynamically to avoid circular dependencies
-    const { createContainer } = await import('@/app/(app)/api/create-container/route')
+    const { createContainer } = await import('@/app/(app)/api/create-container/route') as any
+
+    // Create a new project ID for this mobile-initiated project
+    const projectId = crypto.randomUUID()
 
     // Create sandbox and start generation
     // This will trigger the same flow as the web app
-    const result = await createContainer(req, {
-      userId: userId,
-      prompt: message,
-      template: 'expo', // Default to expo template
+    const result = await createContainer({
+      projectId: projectId,
+      userID: userId,
+      firstMessage: {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: message,
+      } as any,
+      chooseTemplate: 'expo', // Default to expo template
     })
 
     if (!result.success) {
       return NextResponse.json(
         { error: result.error || 'Failed to create project' },
-        { status: 500 }
+        { status: result.status || 500 }
       )
     }
 
