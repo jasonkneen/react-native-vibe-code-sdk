@@ -253,11 +253,21 @@ export function PreviewPanel({
   let basePreviewUrl = result?.url || previewUrl
   // basePreviewUrl = 'http://localhost:8081' // DEV: testing expo local
 
-  // Add sandboxId as query parameter if available
-  const actualPreviewUrl =
-    basePreviewUrl && sandboxId
-      ? `${basePreviewUrl}${basePreviewUrl.includes('?') ? '&' : '?'}sandboxId=${sandboxId}`
-      : basePreviewUrl
+  // Add sandboxId as query parameter if not already present in the URL
+  const actualPreviewUrl = (() => {
+    if (!basePreviewUrl || !sandboxId) return basePreviewUrl
+    try {
+      const url = new URL(basePreviewUrl)
+      if (!url.searchParams.has('sandboxId')) {
+        url.searchParams.set('sandboxId', sandboxId)
+      }
+      return url.toString()
+    } catch {
+      // Fallback for non-parseable URLs
+      if (basePreviewUrl.includes(`sandboxId=${sandboxId}`)) return basePreviewUrl
+      return `${basePreviewUrl}${basePreviewUrl.includes('?') ? '&' : '?'}sandboxId=${sandboxId}`
+    }
+  })()
 
   const displayCode = code || appData?.code
 

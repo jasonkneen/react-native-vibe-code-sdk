@@ -1,19 +1,21 @@
 import { pusherServer } from '@/lib/pusher'
 import { NextRequest, NextResponse } from 'next/server'
 
-// Handle CORS preflight requests
-export async function OPTIONS(req: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  })
+// CORS + Private Network Access headers.
+// Old sandbox templates use fetch() to POST here from *.e2b.app (public origin)
+// to localhost (private/loopback). Chrome's Private Network Access policy blocks
+// this unless the preflight response includes Access-Control-Allow-Private-Network.
+// New sandbox templates use postMessage instead, but we keep this for backward compat.
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Private-Network': 'true',
 }
 
-const corsHeaders = { 'Access-Control-Allow-Origin': '*' }
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders })
+}
 
 const pusherConfigured =
   !!process.env.PUSHER_APP_ID &&

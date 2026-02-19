@@ -197,7 +197,7 @@ export const useHoverSystem = ({
 
       return () => {
         pusherChannel.unbind_all()
-        pusherChannel.unsubscribe()
+        // Disconnect first to avoid "WebSocket is already in CLOSING or CLOSED state" warnings
         pusherClient.disconnect()
       }
     } catch (error) {

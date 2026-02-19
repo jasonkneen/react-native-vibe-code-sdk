@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pusherServer } from '@/lib/pusher'
 
-// Handle CORS preflight requests
-export async function OPTIONS(req: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  })
+// CORS + Private Network Access headers for backward compat with old sandbox templates
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Private-Network': 'true',
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders })
 }
 
 const pusherConfigured =

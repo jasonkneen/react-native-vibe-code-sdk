@@ -14,7 +14,7 @@ import { ArrowUp, Paperclip, Square, X, MousePointerClick, Mic, MicOff, Image as
 import { SetStateAction, useEffect, useMemo, useState, useRef } from 'react'
 import TextareaAutosize from 'react-textarea-autosize'
 import { useAudioRecorder } from '@/hooks/use-audio-recorder'
-import ReactPlaceholderTyping from 'react-placeholder-typing'
+import { TypingPlaceholder } from '@/components/typing-placeholder'
 import { ChatEditor, type ChatEditorRef } from '@/components/tiptap/chat-editor'
 import type { AISkill } from '@/lib/skills'
 import '@/components/tiptap/chat-editor.css'
@@ -374,8 +374,8 @@ export function ChatInput({
             {!input && editorWidth > 0 && (
               <div className="absolute top-0 left-0 pointer-events-none z-0 px-3 pt-2">
                 <div className="absolute -right-[-8px] w-[10px] h-[23px] bg-white dark:bg-primary-foreground"/>
-                <ReactPlaceholderTyping
-                  content={["describe any type of app idea you have...               ", "create that app you always thought of...                "]}
+                <TypingPlaceholder
+                  placeholders={["describe any type of app idea you have...", "create that app you always thought of..."]}
                   containerStyle={{border: 'none', background: 'transparent', padding: 0}}
                   inputStyle={{
                     width: editorWidth - 24,

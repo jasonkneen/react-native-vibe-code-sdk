@@ -36,7 +36,10 @@ async function fetchCommits(
   })
 
   if (!response.ok) {
-    const errorData = await response.json()
+    const errorData = await response.json().catch(() => ({}))
+    if (response.status === 503) {
+      throw new Error(errorData.error || 'Sandbox is unavailable — it may be starting up')
+    }
     throw new Error(errorData.error || 'Failed to fetch commits')
   }
 
@@ -63,6 +66,15 @@ export function useCommitHistory({
     enabled: !!(projectId && sandboxId && userId),
     staleTime: 30 * 1000, // Data is fresh for 30 seconds
     refetchOnWindowFocus: true, // Automatically refetch when tab is focused
+    retry: (failureCount, error) => {
+      // Don't retry on 4xx errors (client errors)
+      if (error instanceof Error && /\b(required|not found|access denied)\b/i.test(error.message)) {
+        return false
+      }
+      // Retry up to 2 times for 5xx/network errors with backoff
+      return failureCount < 2
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
   })
 
   const refetch = async () => {

@@ -63,10 +63,18 @@ export function BackendPanel({ projectId, onClose }: BackendPanelProps) {
     setIsRefreshing(true)
     try {
       const response = await fetch(`/api/convex/status?projectId=${projectId}`)
+      if (!response.ok) {
+        // 401/404 are expected when project is new or user isn't authed yet
+        if (response.status === 401 || response.status === 404) {
+          setStatus(null)
+          return
+        }
+      }
       const data = await response.json()
       setStatus(data)
     } catch (error) {
-      console.error("Error fetching Convex status:", error)
+      // Network errors during initial load are expected — don't spam console
+      setStatus(null)
     } finally {
       setIsRefreshing(false)
     }

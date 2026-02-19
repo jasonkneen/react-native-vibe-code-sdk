@@ -149,7 +149,14 @@ export function useErrorNotifications(
       channel.unbind('error-notification')
       channel.unbind('pusher:subscription_succeeded')
       channel.unbind('pusher:subscription_error')
-      pusherClient.unsubscribe(channelName)
+      // Only unsubscribe if the shared Pusher connection is still open.
+      // When the connection is closing/closed, unsubscribe tries to send
+      // over the WebSocket and triggers "WebSocket is already in CLOSING
+      // or CLOSED state" warnings.
+      const state = pusherClient.connection?.state
+      if (state === 'connected' || state === 'connecting') {
+        pusherClient.unsubscribe(channelName)
+      }
       // Reset last error message when cleaning up
       lastErrorMessageRef.current = null
     }

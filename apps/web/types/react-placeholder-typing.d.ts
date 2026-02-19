@@ -1,12 +1,15 @@
 declare module 'react-placeholder-typing' {
-  import { FC } from 'react'
+  import { FC, CSSProperties } from 'react'
 
   interface PlaceholderTypingProps {
-    content: string[]
-    typingInterval?: number
-    deletingInterval?: number
-    pauseInterval?: number
-    className?: string
+    placeholders?: string[]
+    value?: string
+    onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
+    renderIcon?: () => React.ReactNode
+    fontFamily?: string
+    containerStyle?: CSSProperties
+    inputStyle?: CSSProperties
+    speed?: number
     [key: string]: unknown
   }
 

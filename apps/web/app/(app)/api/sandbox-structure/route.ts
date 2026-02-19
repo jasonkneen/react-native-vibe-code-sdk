@@ -49,14 +49,16 @@ export async function POST(req: Request) {
       .limit(1)
 
     if (!project.length || !project[0].sandboxId) {
-      // console.log('❌ [Sandbox Structure] Project not found or no sandbox ID')
+      // Project doesn't exist yet or sandbox hasn't been created — return empty
+      // structure instead of 404 to avoid console error spam during project creation
       return new Response(
         JSON.stringify({
-          error: 'Project not found or no active sandbox',
-          details:
-            'The project may not exist or may not have an active sandbox',
+          files: [],
+          structure: '',
+          pending: true,
+          message: 'Project sandbox is being created',
         }),
-        { status: 404 },
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
       )
     }
 

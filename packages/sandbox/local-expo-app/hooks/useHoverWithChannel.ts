@@ -87,7 +87,7 @@ export const useHoverWithChannel = () => {
       return () => {
         console.log('[useHoverWithChannel] Cleaning up Pusher connection')
         channel.unbind_all()
-        channel.unsubscribe()
+        // Disconnect first to avoid "WebSocket is already in CLOSING or CLOSED state" warnings
         pusher.disconnect()
       }
     } catch (error) {

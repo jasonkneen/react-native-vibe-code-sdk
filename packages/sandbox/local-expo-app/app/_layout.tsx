@@ -12,14 +12,32 @@ import {
 import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { LogBox } from 'react-native'
+import { LogBox, Platform } from 'react-native'
 import { useHoverWithChannel } from '@/hooks/useHoverWithChannel'
 
-// Ignore the React Fragment id prop warning
+// Suppress the React Fragment `id` prop warning from Expo Router internals.
+// LogBox.ignoreLogs only hides the LogBox UI overlay — it doesn't stop the
+// underlying console.error from firing, so we also patch console.error to
+// filter it out on web where it shows in the browser DevTools.
 LogBox.ignoreLogs([
   'Invalid prop',
   'supplied to `React.Fragment`',
 ])
+
+if (Platform.OS === 'web' && typeof console !== 'undefined') {
+  const originalError = console.error
+  console.error = (...args: any[]) => {
+    // Filter out React Fragment `id` prop warning (Expo Router ContextNavigator bug)
+    if (
+      typeof args[0] === 'string' &&
+      args[0].includes('Invalid prop') &&
+      args[0].includes('React.Fragment')
+    ) {
+      return
+    }
+    originalError.apply(console, args)
+  }
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme()

@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CLAUDE_MODELS, getClaudeModelById } from '@/lib/claude-models'
+import { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL, getClaudeModelById } from '@/lib/claude-models'
 import { Cpu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -25,9 +25,11 @@ export function ClaudeModelSelector({
   compact = false,
 }: ClaudeModelSelectorProps) {
   const currentModel = getClaudeModelById(value)
+  // Ensure the Select always has a valid value to prevent "Select model" placeholder showing
+  const safeValue = currentModel ? value : DEFAULT_CLAUDE_MODEL
 
   return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
+    <Select value={safeValue} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
         className={cn(
           compact
@@ -38,7 +40,7 @@ export function ClaudeModelSelector({
         <div className="flex items-center gap-2 ">
           <Cpu className="h-4 w-4 text-muted-foreground shrink-0" />
           <SelectValue placeholder="Select model">
-            {currentModel?.name || 'Select model'}
+            {currentModel?.name || getClaudeModelById(DEFAULT_CLAUDE_MODEL)?.name || 'Select model'}
           </SelectValue>
         </div>
       </SelectTrigger>

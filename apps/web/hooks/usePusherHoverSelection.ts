@@ -84,10 +84,9 @@ export function usePusherHoverSelection({
       setLatestSelection(data)
     })
 
-    // Cleanup
+    // Cleanup — disconnect first to avoid "WebSocket is already in CLOSING or CLOSED state" warnings
     return () => {
       channel.unbind_all()
-      channel.unsubscribe()
       pusher.disconnect()
       pusherRef.current = null
     }

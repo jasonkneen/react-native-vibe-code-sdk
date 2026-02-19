@@ -4,6 +4,7 @@ import { PostHogProvider, ThemeProvider } from './providers'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as SonnerToaster } from '@/components/ui/sonner'
 import { Analytics } from '@vercel/analytics/next'
+import { ConsoleFilter } from '@/components/console-filter'
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 // import { ReactScan } from '@/components/react-scan'
@@ -40,6 +41,7 @@ export default function RootLayout({
           >
             {children}
           </ThemeProvider>
+          <ConsoleFilter />
           <Toaster />
           <SonnerToaster />
           <Analytics />
