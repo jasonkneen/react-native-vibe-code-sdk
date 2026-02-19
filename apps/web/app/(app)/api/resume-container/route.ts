@@ -7,6 +7,18 @@ import { NextRequest } from 'next/server'
 import { corsHeaders, handleCorsOptions } from '@/lib/cors'
 import { getConvexCredentials, startConvexDevServer } from '@/lib/convex/sandbox-utils'
 
+/** Call recreate-container via HTTP to avoid dynamic-import fragility */
+async function callRecreateContainer(projectId: string, userID: string, teamID?: string) {
+  const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3210'
+  const res = await fetch(`${base}/api/recreate-container`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, userID, teamID }),
+  })
+  const json = await res.json()
+  return { ok: res.ok, json }
+}
+
 export const maxDuration = 300
 
 /**
@@ -66,19 +78,9 @@ export async function POST(req: NextRequest) {
       // No sandbox — go straight to recreate
       console.log('[Resume Container] No sandboxId, triggering recreate-container...')
       try {
-        const { POST: recreateContainer } = await import('../recreate-container/route')
-        const mockRequest = new Request('http://localhost/api/recreate-container', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId, userID, teamID }),
-        })
-        const recreateResponse = await recreateContainer(mockRequest as any)
-        if (recreateResponse.ok) {
-          const recreateResult = await recreateResponse.json()
-          return Response.json({ ...recreateResult, recreated: true }, { headers: corsHeaders })
-        }
-        const recreateError = await recreateResponse.json()
-        return Response.json({ success: false, error: recreateError.error || 'Failed to recreate' }, { status: 500, headers: corsHeaders })
+        const { ok, json } = await callRecreateContainer(projectId, userID, teamID)
+        if (ok) return Response.json({ ...json, recreated: true }, { headers: corsHeaders })
+        return Response.json({ success: false, error: json.error || 'Failed to recreate' }, { status: 500, headers: corsHeaders })
       } catch (err) {
         return Response.json({ success: false, error: err instanceof Error ? err.message : 'Failed to recreate' }, { status: 500, headers: corsHeaders })
       }
@@ -176,37 +178,20 @@ export async function POST(req: NextRequest) {
       // No GitHub repo — fall back to a fresh sandbox via recreate-container
       console.log('[Resume Container] No GitHub repo available; falling back to fresh sandbox via recreate-container')
       try {
-        const { POST: recreateContainer } = await import('../recreate-container/route')
-        const mockRequest = new Request('http://localhost/api/recreate-container', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId, userID, teamID }),
-        })
-        const recreateResponse = await recreateContainer(mockRequest as any)
-        if (recreateResponse.ok) {
-          const recreateResult = await recreateResponse.json()
-          console.log('[Resume Container] Fresh sandbox created via recreate-container:', recreateResult)
-          return Response.json({ ...recreateResult, recreated: true }, { headers: corsHeaders })
-        } else {
-          const recreateError = await recreateResponse.json()
-          console.error('[Resume Container] recreate-container also failed:', recreateError)
-          return Response.json(
-            {
-              success: false,
-              error: 'Failed to recreate sandbox',
-              details: recreateError.error || 'Unknown error',
-            },
-            { status: 500, headers: corsHeaders },
-          )
+        const { ok, json } = await callRecreateContainer(projectId, userID, teamID)
+        if (ok) {
+          console.log('[Resume Container] Fresh sandbox created:', json)
+          return Response.json({ ...json, recreated: true }, { headers: corsHeaders })
         }
-      } catch (fallbackError) {
-        console.error('[Resume Container] Error calling recreate-container fallback:', fallbackError)
+        console.error('[Resume Container] recreate-container failed:', json)
         return Response.json(
-          {
-            success: false,
-            error: 'Failed to resume or recreate sandbox',
-            details: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
-          },
+          { success: false, error: 'Failed to recreate sandbox', details: json.error || 'Unknown error' },
+          { status: 500, headers: corsHeaders },
+        )
+      } catch (fallbackError) {
+        console.error('[Resume Container] Error calling recreate-container:', fallbackError)
+        return Response.json(
+          { success: false, error: 'Failed to resume or recreate sandbox', details: fallbackError instanceof Error ? fallbackError.message : 'Unknown error' },
           { status: 500, headers: corsHeaders },
         )
       }

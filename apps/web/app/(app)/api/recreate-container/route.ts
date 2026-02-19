@@ -9,6 +9,9 @@ import { inngest } from '@/lib/inngest'
 
 export const maxDuration = 300
 
+// Dedup concurrent recreations for the same project — store the result promise
+const inFlight = new Map<string, Promise<{ status: number; body: unknown }>>()
+
 interface RecreateContainerRequest {
   projectId: string
   userID: string
@@ -19,10 +22,8 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 })
 
-export async function POST(req: NextRequest) {
+async function doRecreate(projectId: string, userID: string, teamID?: string): Promise<Response> {
   try {
-    const { projectId, userID, teamID }: RecreateContainerRequest =
-      await req.json()
 
     console.log('[Recreate Container] Recreate container API called with:', {
       projectId,
@@ -231,5 +232,29 @@ git pull origin main || git pull origin master || echo "No remote content to pul
       },
       { status: 500 },
     )
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const { projectId, userID, teamID }: RecreateContainerRequest = await req.json()
+
+  // If a recreation is already in-flight for this project, wait for the same result
+  const existing = inFlight.get(projectId)
+  if (existing) {
+    console.log(`[Recreate Container] Deduping concurrent request for project ${projectId}`)
+    const { status, body } = await existing
+    return Response.json(body, { status })
+  }
+
+  const promise = doRecreate(projectId, userID, teamID).then(async (res) => ({
+    status: res.status,
+    body: await res.json(),
+  }))
+  inFlight.set(projectId, promise)
+  try {
+    const { status, body } = await promise
+    return Response.json(body, { status })
+  } finally {
+    inFlight.delete(projectId)
   }
 }
