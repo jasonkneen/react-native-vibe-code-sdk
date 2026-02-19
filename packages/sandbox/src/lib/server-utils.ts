@@ -159,6 +159,22 @@ export async function startExpoServer(
       envVars.set('EXPO_PUBLIC_PROJECT_ID', projectId)
       console.log('[Server Utils] Set EXPO_PUBLIC_PROJECT_ID:', projectId)
 
+      // Write Pusher public credentials so the Expo app can connect
+      if (process.env.NEXT_PUBLIC_PUSHER_APP_KEY) {
+        envVars.set('EXPO_PUBLIC_PUSHER_APP_KEY', process.env.NEXT_PUBLIC_PUSHER_APP_KEY)
+      }
+      if (process.env.NEXT_PUBLIC_PUSHER_CLUSTER) {
+        envVars.set('EXPO_PUBLIC_PUSHER_CLUSTER', process.env.NEXT_PUBLIC_PUSHER_CLUSTER)
+      }
+
+      // Write the API base URL so hover-selection POSTs reach the right server
+      const apiBaseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.NEXTAUTH_URL ||
+        'http://localhost:3210'
+      envVars.set('EXPO_PUBLIC_API_BASE_URL', apiBaseUrl)
+      console.log('[Server Utils] Set EXPO_PUBLIC_API_BASE_URL:', apiBaseUrl)
+
       // Convert map back to lines
       const newLines = Array.from(envVars.entries()).map(
         ([key, value]) => `${key}=${value}`

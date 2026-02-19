@@ -85,36 +85,15 @@ export const useHoverSystem = ({ enabled, sandboxId }: HoverSystemOptions) => {
         selectedHighlightDiv.style.zIndex = '99998'
       }
 
-      // Send data via API endpoint which will trigger Pusher event
-      if (sandboxId) {
-        // Get the base URL of the parent application
-        // const parentUrl = window.location.origin.includes('localhost')
-        //   ? 'http://localhost:3210'
-        //   : window.location.origin.replace(/:\d+/, ':3210')
-
-        // Use environment variable or fallback to production URL
-        const parentUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://capsule-ide.vercel.app'
-
-        console.log(
-          `📡 Attempting to send to: ${parentUrl}/api/hover-selection`,
+      // Send data to parent window via postMessage (avoids CORS/private-network-access block)
+      try {
+        window.parent.postMessage(
+          { type: 'hover-selection', sandboxId, data: elementData },
+          '*',
         )
-
-        fetch(`${parentUrl}/api/hover-selection`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sandboxId,
-            data: elementData,
-          }),
-        })
-          .then(() => {
-            console.log('📡 Sent selection data via API')
-          })
-          .catch((err) => {
-            console.error('Failed to send selection data:', err)
-          })
+        console.log('📡 Sent selection data via postMessage')
+      } catch (err) {
+        console.error('Failed to send selection data via postMessage:', err)
       }
     },
     [enabled, hoveredElement, channel, sandboxId],

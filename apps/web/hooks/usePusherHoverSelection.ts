@@ -36,6 +36,23 @@ export function usePusherHoverSelection({
     }
   }, [enabled])
 
+  // Listen for postMessage from the Expo iframe (avoids CORS/private-network-access)
+  useEffect(() => {
+    if (!enabled) return
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'hover-selection') return
+      // If we have a sandboxId, only accept messages from that sandbox
+      if (sandboxId && event.data.sandboxId && event.data.sandboxId !== sandboxId) return
+      if (event.data.data) {
+        setLatestSelection(event.data.data)
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [sandboxId, enabled])
+
   useEffect(() => {
     if (!sandboxId || !enabled) return
 
@@ -62,7 +79,7 @@ export function usePusherHoverSelection({
       setIsConnected(false)
     })
 
-    // Listen for hover selection events
+    // Listen for hover selection events (Pusher fallback for non-iframe usage)
     channel.bind('hover-selection', (data: HoverSelectionData) => {
       setLatestSelection(data)
     })
