@@ -10,7 +10,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const sandbox = await Sandbox.connect(sandboxId)
+    let sandbox: InstanceType<typeof Sandbox>
+    try {
+      sandbox = await Sandbox.connect(sandboxId)
+    } catch {
+      // Sandbox is dead/paused — return empty assets instead of 500
+      return NextResponse.json({ assets: [] })
+    }
 
     // Read manifest file
     const manifestPath = "/home/user/app/assets/manifest.json"
@@ -20,20 +26,15 @@ export async function GET(request: NextRequest) {
       const manifestData = await sandbox.files.read(manifestPath)
       const manifest = JSON.parse(manifestData.toString())
 
-      // Convert manifest object to array and filter to only include assets with blob mappings
       const allAssets: Array<{ name: string; path: string; type: "image" | "font" | "other"; blobUrl?: string; size?: number }> = Object.values(manifest)
       assets = allAssets.filter(asset => asset.blobUrl)
-    } catch (err) {
-      console.log("No manifest file found, returning empty assets list")
-      // No fallback to directory listing - only show assets with blob mappings
+    } catch {
+      // No manifest file — empty assets
     }
 
     return NextResponse.json({ assets })
   } catch (error) {
     console.error("Error fetching assets:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch assets" },
-      { status: 500 }
-    )
+    return NextResponse.json({ assets: [] })
   }
 }
