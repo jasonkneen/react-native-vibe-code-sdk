@@ -408,9 +408,9 @@ const AssistantMessageCard = memo(function AssistantMessageCard({ data, isStream
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <p className="text-sm">
+          <div className="text-sm">
             <Markdown>{textContent}</Markdown>
-          </p>
+          </div>
         </CardContent>
       </Card>
     )
@@ -457,9 +457,9 @@ const ResultCard = memo(function ResultCard({ data, isStreaming }: { data: any; 
       streamingIndicator={isStreaming ? <Cog className={`h-4 w-4 ${isSuccess ? 'text-green-600' : 'text-red-600'} animate-cog-spin`} /> : undefined}
     >
       <div className="space-y-2">
-        <p className="text-sm">
+        <div className="text-sm">
           <Markdown>{typeof result === 'string' ? result : JSON.stringify(result, null, 2)}</Markdown>
-        </p>
+        </div>
         {data.duration_ms && (
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">

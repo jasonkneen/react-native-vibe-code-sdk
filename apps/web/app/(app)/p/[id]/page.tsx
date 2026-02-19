@@ -499,7 +499,11 @@ function ProjectPageInternal() {
     sandboxId: currentProject?.sandboxId || null,
     projectId: projectId || null,
     userId: session?.user?.id || null,
-    ngrokUrl: (result as any)?.ngrokUrl || currentProject?.ngrokUrl || null,
+    ngrokUrl: (() => {
+      const url = (result as any)?.ngrokUrl || currentProject?.ngrokUrl || null
+      // Only pass real ngrok URLs — stale E2B URLs or unconfigured state must not trigger the hook
+      return url && url.includes('ngrok') ? url : null
+    })(),
     enabled: !!currentProject?.sandboxId && !!session?.user?.id,
     serverReady: !!(result as any)?.url && !isPreviewLoading, // Only start after initial server is ready
     pollingInterval: 60000, // 60 seconds

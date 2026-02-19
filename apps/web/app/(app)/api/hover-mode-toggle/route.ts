@@ -13,51 +13,44 @@ export async function OPTIONS(req: NextRequest) {
   })
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+}
+
+const pusherConfigured =
+  !!process.env.PUSHER_APP_ID &&
+  !!process.env.NEXT_PUBLIC_PUSHER_APP_KEY &&
+  !!process.env.PUSHER_APP_SECRET &&
+  !!process.env.NEXT_PUBLIC_PUSHER_CLUSTER
+
 export async function POST(req: NextRequest) {
   try {
     const { sandboxId, enabled } = await req.json()
-    
-    console.log('[API] Received hover mode toggle request:', { sandboxId, enabled })
-    
+
     if (!sandboxId || typeof enabled !== 'boolean') {
-      console.error('[API] Invalid request params:', { sandboxId, enabled })
       return NextResponse.json(
         { error: 'Missing sandboxId or enabled boolean' },
-        { 
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-          }
-        }
+        { status: 400, headers: corsHeaders },
       )
     }
-    
+
+    // Pusher not configured — no-op but don't error the client
+    if (!pusherConfigured) {
+      return NextResponse.json(
+        { success: true, skipped: true },
+        { headers: corsHeaders },
+      )
+    }
+
     const channelName = `sandbox-${sandboxId}`
-    console.log(`[API] Triggering hover-mode-toggle event on channel: ${channelName}`)
-    
-    // Trigger the hover mode toggle event
     await pusherServer.trigger(channelName, 'hover-mode-toggle', { enabled })
-    
-    console.log('[API] Successfully triggered hover mode toggle event')
-    
-    return NextResponse.json(
-      { success: true },
-      {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        }
-      }
-    )
+
+    return NextResponse.json({ success: true }, { headers: corsHeaders })
   } catch (error) {
     console.error('[API] Hover mode toggle trigger error:', error)
     return NextResponse.json(
       { error: 'Failed to trigger hover mode toggle event' },
-      { 
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        }
-      }
+      { status: 500, headers: corsHeaders },
     )
   }
 }

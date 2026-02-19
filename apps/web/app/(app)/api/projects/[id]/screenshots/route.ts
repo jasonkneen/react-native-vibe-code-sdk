@@ -52,6 +52,15 @@ function delay(ms: number): Promise<void> {
  */
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
+
+  // Vercel Blob is required for screenshots — skip silently when not configured
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return new Response(
+      JSON.stringify({ success: true, skipped: true, reason: 'BLOB_READ_WRITE_TOKEN not configured' }),
+      { status: 200 }
+    )
+  }
+
   let browser = null
 
   try {

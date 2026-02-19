@@ -16,12 +16,13 @@ export async function startExpoServer(
   let port = 8081
 
   console.log('[Server Utils] sandboxId', sandbox.sandboxId)
-  // Use sandbox ID as the ngrok domain (e.g., sandbox ID becomes sandboxid.ngrok.dev)
-  const ngrokDomain = customNgrokUrl || sandbox.sandboxId
-  const ngrokUrl = `https://${ngrokDomain}.ngrok.dev`
+  // Only build an ngrok URL if NGROK_AUTHTOKEN is actually configured
+  const useNgrokToken = !!process.env.NGROK_AUTHTOKEN || !!customNgrokUrl
+  const ngrokDomain = useNgrokToken ? (customNgrokUrl || sandbox.sandboxId) : null
+  const ngrokUrl = ngrokDomain ? `https://${ngrokDomain}.ngrok.dev` : undefined
 
-  console.log('[Server Utils] Using ngrok domain:', ngrokDomain)
-  console.log('[Server Utils] Ngrok URL will be:', ngrokUrl)
+  console.log('[Server Utils] Ngrok enabled:', useNgrokToken)
+  if (ngrokUrl) console.log('[Server Utils] Ngrok URL will be:', ngrokUrl)
 
   // Set sandbox timeout to 1 hour
   console.log('[Server Utils] Setting sandbox timeout to 1 hour...')
@@ -201,7 +202,7 @@ export async function startExpoServer(
 
   // Start the web server in background
   // Build the command — only use ngrok tunnel if NGROK_AUTHTOKEN is configured
-  const useNgrok = !!process.env.NGROK_AUTHTOKEN
+  const useNgrok = useNgrokToken
   const startCommand = useNgrok
     ? `cd /home/user/app && CI=false bun install && bun run start -- --ngrokurl ${ngrokDomain} --tunnel --web`
     : `cd /home/user/app && CI=false bun install && bun run start -- --web`
@@ -329,7 +330,7 @@ export async function startExpoServer(
         .set({
           sandboxUrl: publicUrl,
           serverReady: webBundled,
-          ngrokUrl: ngrokUrl,
+          ngrokUrl: ngrokUrl ?? null, // explicitly clear stale ngrok URL when not configured
           updatedAt: new Date(),
         })
         .where(eq(projects.id, projectId))

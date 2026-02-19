@@ -86,19 +86,23 @@ function sendConvexError(projectId: string, logData: string): void {
 
       if (cleanError.length > 0) {
         const channelName = `${projectId}-errors`
-        pusherServer.trigger(channelName, 'error-notification', {
-          message: cleanError,
-          timestamp: new Date().toISOString(),
-          projectId,
-          type: 'convex-error',
-          source: 'convex-dev',
-        })
-        .then(() => {
-          console.log(`[Convex Dev] Error notification sent to channel: ${channelName}`)
-        })
-        .catch((error) => {
-          console.error('[Convex Dev] Failed to send error notification:', error)
-        })
+        try {
+          pusherServer.trigger(channelName, 'error-notification', {
+            message: cleanError,
+            timestamp: new Date().toISOString(),
+            projectId,
+            type: 'convex-error',
+            source: 'convex-dev',
+          })
+          .then(() => {
+            console.log(`[Convex Dev] Error notification sent to channel: ${channelName}`)
+          })
+          .catch((error) => {
+            console.error('[Convex Dev] Failed to send error notification:', error)
+          })
+        } catch {
+          // Pusher not configured or unavailable — skip notification silently
+        }
       }
 
       bufferData!.buffer = ''

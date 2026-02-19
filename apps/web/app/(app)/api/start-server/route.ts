@@ -46,8 +46,6 @@ export async function POST(req: NextRequest) {
           and(
             eq(projects.id, projectId),
             eq(projects.userId, userID),
-            eq(projects.sandboxId, sandboxId),
-            eq(projects.status, 'active'),
           ),
         )
         .limit(1)
@@ -62,7 +60,8 @@ export async function POST(req: NextRequest) {
       project = existingProjects[0]
 
       // Check if server is already running AND sandbox is still valid
-      if (project.serverStatus === 'running' && project.sandboxUrl && project.ngrokUrl) {
+      // Note: only check sandboxUrl — ngrokUrl is optional (not configured without NGROK_AUTHTOKEN)
+      if (project.serverStatus === 'running' && project.sandboxUrl) {
         // Verify the sandbox is still active before returning cached URLs
         try {
           console.log('Verifying sandbox is still active:', sandboxId)
