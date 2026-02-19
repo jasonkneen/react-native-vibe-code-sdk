@@ -14,7 +14,7 @@ export function RunLocally() {
   }
 
   return (
-    <section className="w-full bg-background py-20 md:py-32 md:pt-0 -top-[240px] relative">
+    <section className="w-full bg-background py-20 pt-[5px] md:py-32 md:pt-0 md:-top-[240px] md:relative">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
         {/* Headline */}
         <div className="text-center mb-8 md:mb-12 max-w-4xl m-auto">

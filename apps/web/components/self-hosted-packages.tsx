@@ -53,10 +53,10 @@ const packages: PackageInfo[] = [
     docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/sandbox',
   },
   {
-    id: 'starter-kit',
-    name: 'starter-kit',
-    shortDescription: 'Complete Expo template with 67+ packages for AI-powered mobile development',
-    icon: <Sparkles className="w-5 h-5" />,
+    id: 'create-rnvibecode',
+    name: 'create-rnvibecode',
+    shortDescription: 'CLI to scaffold Expo projects with 67+ packages and Claude Code system prompt',
+    icon: <Terminal className="w-5 h-5" />,
     color: 'emerald',
     docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/starter-kit',
   },
@@ -217,7 +217,7 @@ const colorClasses: Record<string, { bg: string; text: string; border: string }>
 
 export function SelfHostedPackages() {
   return (
-    <section className="w-full bg-background py-20 md:py-32 md:pt-0 -top-[240px] relative">
+    <section className="w-full bg-background py-20 pt-[5px] md:py-32 md:pt-0 md:-top-[240px] md:relative">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
         {/* Hero Headline */}
         <div className="text-center mb-8 md:mb-12 max-w-4xl m-auto">

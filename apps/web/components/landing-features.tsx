@@ -27,7 +27,7 @@ const INTEGRATION_ICONS_ROW2 = [
 
 export function LandingFeatures() {
   return (
-    <section className="w-full bg-background py-20 md:py-32 md:pt-0 -top-240px] md:-top-[240px] relative">
+    <section className="w-full bg-background py-20 pt-[5px] md:py-32 md:pt-0 md:-top-[240px] md:relative">
       <div className="max-w-6xl mx-auto px-4 md:px-8">
         {/* Hero Headline */}
         <div className="text-center mb-2 md:mb-4 max-w-4xl m-auto">
