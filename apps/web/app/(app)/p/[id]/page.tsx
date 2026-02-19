@@ -527,6 +527,8 @@ function ProjectPageInternal() {
   const sandboxStartTimeRef = useRef<Date | null>(null)
   // Track if we're currently starting/restarting the server to avoid race conditions
   const isStartingServerRef = useRef(false)
+  // Cooldown after a failed resume attempt — prevents rapid retry spam on tab focus
+  const lastResumeFailureRef = useRef<number>(0)
 
   // Code panel state
   const [currentFile, setCurrentFile] = useState('')
@@ -972,9 +974,11 @@ function ProjectPageInternal() {
               })
             } else {
               console.error('[Server Check] resume-container returned failure:', result.error)
+              lastResumeFailureRef.current = Date.now()
             }
           } catch (error) {
             console.error('[Server Check] Error resuming container:', error)
+            lastResumeFailureRef.current = Date.now()
           } finally {
             setIsPreviewLoading(false)
             isStartingServerRef.current = false
@@ -1160,6 +1164,13 @@ function ProjectPageInternal() {
           return
         }
 
+        // Skip if we recently failed a resume attempt (30s cooldown to avoid spam)
+        const RESUME_COOLDOWN_MS = 30_000
+        if (Date.now() - lastResumeFailureRef.current < RESUME_COOLDOWN_MS) {
+          console.log('[Visibility] Skipping — recent resume failure, cooldown active')
+          return
+        }
+
         try {
           // STEP 1: Check if sandbox container is alive first (silently, no loading UI)
           console.log('[Visibility] Silently checking sandbox container status...')
@@ -1253,9 +1264,11 @@ function ProjectPageInternal() {
                 })
               } else {
                 console.error('[Visibility] Failed to resume container:', result.error)
+                lastResumeFailureRef.current = Date.now()
               }
             } catch (error) {
               console.error('[Visibility] Error resuming container:', error)
+              lastResumeFailureRef.current = Date.now()
             } finally {
               setIsPreviewLoading(false)
               isStartingServerRef.current = false

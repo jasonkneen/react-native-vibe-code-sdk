@@ -59,8 +59,13 @@ export async function POST(req: NextRequest) {
     // Create new sandbox from github template (shell for loading existing repos)
     let sandbox: Sandbox
     try {
-      console.log('[Recreate Sandbox] Creating new sandbox from github template...')
-      sandbox = await Sandbox.create('xzfs8fvtvpe3tcqgyyrp', {
+      console.log('[Recreate Sandbox] Creating new sandbox from expo template...')
+      const templateId = {
+        expo: 'a3lmq9qc4tpctk5654yv',
+        tamagui: '10aeyh6gcn9lmorirs2z',
+      }
+      const templateSelection: keyof typeof templateId = (process.env.TEMPLATE_SELECTION as keyof typeof templateId) || 'expo'
+      sandbox = await Sandbox.create(templateId[templateSelection], {
         timeoutMs: parseInt(process.env.E2B_SANDBOX_TIMEOUT_MS || '3600000'), // Use env var, default to 1 hour
       })
       console.log(`[Recreate Sandbox] Created new sandbox: ${sandbox.sandboxId}`)

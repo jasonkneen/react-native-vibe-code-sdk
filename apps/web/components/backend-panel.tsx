@@ -26,6 +26,7 @@ interface ConvexState {
     deploymentName: string
   }
   devRunning: boolean
+  oauthConfigured?: boolean
 }
 
 export function BackendPanel({ projectId, onClose }: BackendPanelProps) {
@@ -325,35 +326,44 @@ export function BackendPanel({ projectId, onClose }: BackendPanelProps) {
                       Error: {status.state.errorMessage}
                     </p>
                   </div>
-                  <Tabs defaultValue="managed" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="managed">Managed Backend</TabsTrigger>
-                      <TabsTrigger value="oauth">Your Convex Account</TabsTrigger>
-                    </TabsList>
+                  {status.oauthConfigured ? (
+                    <Tabs defaultValue="managed" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="managed">Managed Backend</TabsTrigger>
+                        <TabsTrigger value="oauth">Your Convex Account</TabsTrigger>
+                      </TabsList>
 
-                    <TabsContent value="managed" className="space-y-3">
-                      <ConvexManagedButton
-                        projectId={projectId}
-                        onSuccess={() => {
-                          fetchStatus()
-                        }}
-                      />
-                    </TabsContent>
+                      <TabsContent value="managed" className="space-y-3">
+                        <ConvexManagedButton
+                          projectId={projectId}
+                          onSuccess={() => {
+                            fetchStatus()
+                          }}
+                        />
+                      </TabsContent>
 
-                    <TabsContent value="oauth" className="space-y-3">
-                      <ConvexTeamSelector
-                        value={selectedTeam}
-                        onChange={setSelectedTeam}
-                      />
-                      <ConvexConnectButton
-                        projectId={projectId}
-                        teamSlug={selectedTeam}
-                        onSuccess={() => {
-                          fetchStatus()
-                        }}
-                      />
-                    </TabsContent>
-                  </Tabs>
+                      <TabsContent value="oauth" className="space-y-3">
+                        <ConvexTeamSelector
+                          value={selectedTeam}
+                          onChange={setSelectedTeam}
+                        />
+                        <ConvexConnectButton
+                          projectId={projectId}
+                          teamSlug={selectedTeam}
+                          onSuccess={() => {
+                            fetchStatus()
+                          }}
+                        />
+                      </TabsContent>
+                    </Tabs>
+                  ) : (
+                    <ConvexManagedButton
+                      projectId={projectId}
+                      onSuccess={() => {
+                        fetchStatus()
+                      }}
+                    />
+                  )}
                 </>
               ) : status?.state?.kind === "connecting" ? (
                 <>
@@ -365,14 +375,49 @@ export function BackendPanel({ projectId, onClose }: BackendPanelProps) {
                 </>
               ) : (
                 <>
-                  {/* Not Connected State - Show both options */}
-                  <Tabs defaultValue="managed" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="managed">Managed Backend</TabsTrigger>
-                      <TabsTrigger value="oauth">Your Convex Account</TabsTrigger>
-                    </TabsList>
+                  {/* Not Connected State */}
+                  {status?.oauthConfigured ? (
+                    <Tabs defaultValue="managed" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="managed">Managed Backend</TabsTrigger>
+                        <TabsTrigger value="oauth">Your Convex Account</TabsTrigger>
+                      </TabsList>
 
-                    <TabsContent value="managed" className="space-y-3">
+                      <TabsContent value="managed" className="space-y-3">
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                          <p className="text-sm text-blue-900">
+                            We&apos;ll create and manage a Convex backend for you. No Convex account needed.
+                          </p>
+                        </div>
+                        <ConvexManagedButton
+                          projectId={projectId}
+                          onSuccess={() => {
+                            fetchStatus()
+                          }}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="oauth" className="space-y-3">
+                        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                          <p className="text-sm text-purple-900">
+                            Connect your own Convex account to manage your backend directly.
+                          </p>
+                        </div>
+                        <ConvexTeamSelector
+                          value={selectedTeam}
+                          onChange={setSelectedTeam}
+                        />
+                        <ConvexConnectButton
+                          projectId={projectId}
+                          teamSlug={selectedTeam}
+                          onSuccess={() => {
+                            fetchStatus()
+                          }}
+                        />
+                      </TabsContent>
+                    </Tabs>
+                  ) : (
+                    <div className="space-y-3">
                       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                         <p className="text-sm text-blue-900">
                           We&apos;ll create and manage a Convex backend for you. No Convex account needed.
@@ -384,27 +429,8 @@ export function BackendPanel({ projectId, onClose }: BackendPanelProps) {
                           fetchStatus()
                         }}
                       />
-                    </TabsContent>
-
-                    <TabsContent value="oauth" className="space-y-3">
-                      <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
-                        <p className="text-sm text-purple-900">
-                          Connect your own Convex account to manage your backend directly.
-                        </p>
-                      </div>
-                      <ConvexTeamSelector
-                        value={selectedTeam}
-                        onChange={setSelectedTeam}
-                      />
-                      <ConvexConnectButton
-                        projectId={projectId}
-                        teamSlug={selectedTeam}
-                        onSuccess={() => {
-                          fetchStatus()
-                        }}
-                      />
-                    </TabsContent>
-                  </Tabs>
+                    </div>
+                  )}
                 </>
               )}
             </div>

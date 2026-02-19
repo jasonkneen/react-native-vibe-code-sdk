@@ -60,8 +60,15 @@ export function CloudSidebarPanel({
       toast.success('Cloud enabled successfully! Your database is now ready.')
       onCloudEnabled?.()
     } catch (error) {
-      console.error('Failed to enable cloud:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to enable cloud')
+      const message = error instanceof Error ? error.message : 'Failed to enable cloud'
+      // "already enabled" is not a real error — just stale UI state
+      if (message.includes('already enabled')) {
+        toast.info('Cloud is already enabled for this project.')
+        onCloudEnabled?.()
+      } else {
+        console.error('Failed to enable cloud:', error)
+        toast.error(message)
+      }
     } finally {
       setIsEnabling(false)
     }
@@ -188,14 +195,16 @@ export function CloudSidebarPanel({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Enable Cloud Backend?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>This will set up a real-time database for your project. Once enabled:</p>
-              <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-                <li>A Convex backend will be provisioned</li>
-                <li>Database files will be added to your project</li>
-                <li>The AI will be able to create backend logic</li>
-                <li>Data will sync in real-time across devices</li>
-              </ul>
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-muted-foreground space-y-2">
+                <p>This will set up a real-time database for your project. Once enabled:</p>
+                <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+                  <li>A Convex backend will be provisioned</li>
+                  <li>Database files will be added to your project</li>
+                  <li>The AI will be able to create backend logic</li>
+                  <li>Data will sync in real-time across devices</li>
+                </ul>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

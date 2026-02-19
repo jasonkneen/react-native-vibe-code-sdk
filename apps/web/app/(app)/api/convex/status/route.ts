@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
 
     console.log('[Convex Status] Project:', projectId, 'convexProject:', JSON.stringify(convexProject))
 
+    const oauthConfigured = !!(process.env.CONVEX_OAUTH_CLIENT_ID && process.env.CONVEX_OAUTH_CLIENT_SECRET)
+
     // If not connected, return the state
     if (!convexProject || convexProject.kind !== 'connected') {
       console.log('[Convex Status] Not connected, returning:', { connected: false, state: convexProject || null })
@@ -44,6 +46,7 @@ export async function GET(request: NextRequest) {
         connected: false,
         state: convexProject || null,
         devRunning: project.convexDevRunning || false,
+        oauthConfigured,
       })
     }
 
@@ -68,6 +71,7 @@ export async function GET(request: NextRequest) {
           }
         : null,
       devRunning: project.convexDevRunning || false,
+      oauthConfigured,
     })
   } catch (error) {
     console.error('Error in Convex status API:', error)
