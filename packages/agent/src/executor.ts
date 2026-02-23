@@ -120,7 +120,6 @@ export async function runExecutor(
 
     for await (const message of query({
       prompt: finalPrompt,
-      abortController: new AbortController(),
       options: {
         cwd,
         permissionMode: 'bypassPermissions',

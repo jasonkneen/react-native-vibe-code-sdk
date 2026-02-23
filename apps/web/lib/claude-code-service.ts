@@ -165,6 +165,22 @@ export class ClaudeCodeService {
           console.error('[Claude Code Service] ❌ Failed to check cloud status:', dbError)
         }
 
+        // Write Claude settings to skip the WebFetch preflight call to claude.ai.
+        // Inside an E2B sandbox the preflight request (GET claude.ai/api/web/domain_info)
+        // can hang indefinitely when the packet is silently dropped rather than refused.
+        // This is a known SDK bug (GitHub #8980, #10075, #11650) with no upstream fix.
+        try {
+          const claudeSettingsDir = '/root/.claude'
+          await sandbox.commands.run(`mkdir -p ${claudeSettingsDir}`, { timeoutMs: 5000 })
+          await sandbox.files.write(
+            `${claudeSettingsDir}/settings.json`,
+            JSON.stringify({ skipWebFetchPreflight: true }, null, 2)
+          )
+          console.log('[Claude Code Service] ✅ Written skipWebFetchPreflight=true to Claude settings')
+        } catch (settingsError) {
+          console.error('[Claude Code Service] ❌ Failed to write Claude settings:', settingsError)
+        }
+
         // Write the system prompt to a file in the sandbox (avoids shell escaping issues with large prompts)
         const systemPromptPath = '/claude-sdk/system-prompt.txt'
         const systemPrompt = getPromptWithCloudStatus(cloudEnabled)
