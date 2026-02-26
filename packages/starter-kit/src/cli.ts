@@ -145,6 +145,32 @@ async function createProject(projectName: string, options: { skipInstall?: boole
   console.log(chalk.dim('Claude Code is pre-configured via CLAUDE.md'))
   console.log()
 
+  // Promo boxes
+  const boxWidth = 58
+  const border = chalk.cyan('┌' + '─'.repeat(boxWidth) + '┐')
+  const borderBottom = chalk.cyan('└' + '─'.repeat(boxWidth) + '┘')
+  const emptyLine = chalk.cyan('│') + ' '.repeat(boxWidth) + chalk.cyan('│')
+  const boxLine = (text: string) => {
+    const stripped = text.replace(/\u001b\[[0-9;]*m/g, '')
+    const padding = boxWidth - stripped.length
+    return chalk.cyan('│') + ' ' + text + ' '.repeat(Math.max(0, padding - 1)) + chalk.cyan('│')
+  }
+
+  console.log(border)
+  console.log(emptyLine)
+  console.log(boxLine(chalk.bold('Try the full vibe coding experience at')))
+  console.log(boxLine(chalk.blue.underline('https://reactnativevibecode.com')))
+  console.log(emptyLine)
+  console.log(borderBottom)
+  console.log()
+  console.log(border)
+  console.log(emptyLine)
+  console.log(boxLine(chalk.bold('The free and open source')))
+  console.log(boxLine(chalk.bold('React Native Vibe Code SDK and IDE')))
+  console.log(emptyLine)
+  console.log(borderBottom)
+  console.log()
+
   process.exit(0)
 }
 
@@ -153,7 +179,7 @@ const program = new Command()
 program
   .name('create-rnvibecode')
   .description('Create a new React Native Vibe Code project')
-  .version('0.0.4')
+  .version('0.0.5')
   .argument('<project-name>', 'Name of the project to create')
   .option('--skip-install', 'Skip dependency installation')
   .action(async (projectName: string, options: { skipInstall?: boolean }) => {
