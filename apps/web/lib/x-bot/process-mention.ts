@@ -180,6 +180,16 @@ export async function processMention(
 ): Promise<{ action: string; projectId?: string; error?: string }> {
   const { tweetId, text, authorId, mediaUrls: mentionMediaUrls, parentTweetText, parentMediaUrls, parentAuthorId } = mention
 
+  console.log(`[X-Bot] processMention called for tweet ${tweetId}:`, {
+    textPreview: text?.substring(0, 100),
+    authorId,
+    mentionMediaCount: mentionMediaUrls?.length || 0,
+    hasParentText: !!parentTweetText,
+    parentTextPreview: parentTweetText?.substring(0, 100),
+    parentMediaCount: parentMediaUrls?.length || 0,
+    parentAuthorId,
+  })
+
   // Merge parent + mention media URLs
   // Parent images come first (they provide the design context)
   // Reply images are included only if the reply author is the same as the parent author
@@ -288,6 +298,7 @@ export async function processMention(
     }
   } else {
     console.log(`[X-Bot] Classifier disabled — treating tweet ${tweetId} as app request`)
+    console.log(`[X-Bot] Parent tweet text present: ${!!parentTweetText}, fallback description (first 200 chars): "${fallbackAppDescription?.substring(0, 200)}"`)
   }
 
   // Check subscription/credits before generation

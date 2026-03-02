@@ -102,8 +102,48 @@ export async function POST(request: NextRequest) {
 
       const mediaUrls = extractMediaFromWebhookTweet(tweet)
 
+      // Fetch parent tweet data if this is a reply
+      let parentTweetText: string | undefined
+      let parentMediaUrls: string[] | undefined
+      let parentAuthorId: string | undefined
+
+      const parentTweetId = tweet.in_reply_to_status_id_str
+      if (parentTweetId) {
+        console.log(`[X-Bot Webhook] Tweet ${tweetId} is a reply to ${parentTweetId}, fetching parent tweet...`)
+        try {
+          const parentTweet = await client.tweets.findTweetById(parentTweetId, {
+            'tweet.fields': ['author_id', 'text', 'attachments'],
+            'media.fields': ['url', 'type', 'media_key', 'preview_image_url'],
+            expansions: ['attachments.media_keys'],
+          })
+
+          if (parentTweet.data) {
+            parentTweetText = parentTweet.data.text || undefined
+            parentAuthorId = parentTweet.data.author_id || undefined
+
+            // Extract parent tweet media
+            const parentMediaKeys = parentTweet.data.attachments?.media_keys || []
+            const parentMediaIncludes = parentTweet.includes?.media || []
+            if (parentMediaKeys.length > 0) {
+              parentMediaUrls = []
+              for (const key of parentMediaKeys) {
+                const media = parentMediaIncludes.find((m: any) => m.media_key === key)
+                if (media && media.type === 'photo' && media.url) {
+                  parentMediaUrls.push(media.url)
+                }
+              }
+            }
+
+            console.log(`[X-Bot Webhook] Parent tweet text: "${parentTweetText?.substring(0, 50)}..."`)
+            console.log(`[X-Bot Webhook] Parent tweet images: ${parentMediaUrls?.length || 0}`)
+          }
+        } catch (error) {
+          console.error(`[X-Bot Webhook] Failed to fetch parent tweet ${parentTweetId}:`, error)
+        }
+      }
+
       const result = await processMention(
-        { tweetId, text, authorId, mediaUrls },
+        { tweetId, text, authorId, mediaUrls, parentTweetText, parentMediaUrls, parentAuthorId },
         client,
         baseUrl
       )

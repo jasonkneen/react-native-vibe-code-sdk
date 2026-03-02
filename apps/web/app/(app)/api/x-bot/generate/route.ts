@@ -63,6 +63,8 @@ export async function POST(request: NextRequest) {
   }
 
   console.log(`[X-Bot Generate] Starting generation for tweet ${tweetId}, project ${projectId}`)
+  console.log(`[X-Bot Generate] App description (first 200 chars): "${appDescription?.substring(0, 200)}"`)
+  console.log(`[X-Bot Generate] Image URLs: ${imageUrls?.length || 0}`, imageUrls)
 
   try {
     // Update xBotReplies status to generating
