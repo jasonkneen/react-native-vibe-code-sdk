@@ -120,12 +120,20 @@ export async function POST(request: NextRequest) {
 
           // Save messages to DB so chat panel shows history
           try {
+            // Build user message parts: text + any attached images
+            const userParts: UIMessage['parts'] = [{ type: 'text', text: appDescription }]
+            if (imageUrls && imageUrls.length > 0) {
+              for (const url of imageUrls) {
+                userParts.push({ type: 'image', image: url } as any)
+              }
+            }
+
             const userMessage: UIMessage = {
               id: `xbot-${tweetId}`,
               role: 'user',
               content: appDescription,
               createdAt: new Date(),
-              parts: [{ type: 'text', text: appDescription }],
+              parts: userParts,
             }
             const assistantMessage: UIMessage = {
               id: `xbot-${tweetId}-response`,
@@ -168,12 +176,20 @@ export async function POST(request: NextRequest) {
           // Save partial content + error to DB so user sees what happened
           if (fullContent) {
             try {
+              // Build user message parts: text + any attached images
+              const userParts: UIMessage['parts'] = [{ type: 'text', text: appDescription }]
+              if (imageUrls && imageUrls.length > 0) {
+                for (const url of imageUrls) {
+                  userParts.push({ type: 'image', image: url } as any)
+                }
+              }
+
               const userMessage: UIMessage = {
                 id: `xbot-${tweetId}`,
                 role: 'user',
                 content: appDescription,
                 createdAt: new Date(),
-                parts: [{ type: 'text', text: appDescription }],
+                parts: userParts,
               }
               const assistantMessage: UIMessage = {
                 id: `xbot-${tweetId}-response`,

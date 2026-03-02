@@ -158,7 +158,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, processed: results.length, results })
   } catch (error: any) {
-    console.error('[X-Bot Poll] Error:', error)
+    console.error('[X-Bot Poll] Error:', {
+      message: error?.message,
+      name: error?.name,
+      status: error?.status,
+      code: error?.code,
+      stack: error?.stack?.substring(0, 500),
+    })
     return NextResponse.json(
       { error: error.message || 'Poll failed' },
       { status: 500 }
