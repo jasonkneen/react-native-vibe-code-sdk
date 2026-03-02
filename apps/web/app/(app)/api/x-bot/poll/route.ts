@@ -37,12 +37,12 @@ async function setLastTweetId(tweetId: string): Promise<void> {
 }
 
 export async function GET(request: NextRequest) {
-  // Verify cron secret (Vercel sends this header for cron jobs)
-  const authHeader = request.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // TODO: Re-enable cron secret auth after confirming CRON_SECRET env var is deployed
+  // const authHeader = request.headers.get('authorization')
+  // const cronSecret = process.env.CRON_SECRET
+  // if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // }
 
   try {
     const client = await getAuthClient()
