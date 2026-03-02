@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
         baseUrl
       )
 
-      results.push({ tweetId, action: result.action })
+      results.push({ tweetId, action: result.action, error: result.error })
 
       // Update sinceId after each successful processing
       await setLastTweetId(tweetId)
