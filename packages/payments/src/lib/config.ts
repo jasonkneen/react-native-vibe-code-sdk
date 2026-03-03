@@ -61,7 +61,8 @@ export const PLANS: Plan[] = [
   {
     name: 'Start',
     slug: 'start',
-    price: 20,
+    price: 9.99,
+    originalPrice: 20,
     period: 'mo',
     messageLimit: 100,
     features: [
@@ -75,7 +76,8 @@ export const PLANS: Plan[] = [
   {
     name: 'Pro',
     slug: 'pro',
-    price: 45,
+    price: 19.99,
+    originalPrice: 45,
     period: 'mo',
     messageLimit: 250,
     features: [
@@ -90,7 +92,8 @@ export const PLANS: Plan[] = [
   {
     name: 'Senior',
     slug: 'senior',
-    price: 90,
+    price: 49.99,
+    originalPrice: 90,
     period: 'mo',
     messageLimit: 500,
     features: [
