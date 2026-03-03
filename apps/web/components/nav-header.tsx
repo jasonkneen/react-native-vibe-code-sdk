@@ -73,9 +73,6 @@ import {
   ExternalLink,
   GitFork,
   Copy,
-  Loader2,
-  AlertCircle,
-  Pencil,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -87,9 +84,6 @@ import { useDevMode } from '@/context/dev-mode-context'
 import { Code } from 'lucide-react'
 import { useSubscriptionStatus } from '@/lib/polar-client'
 import { ConvexConnection } from '@/components/convex/ConvexConnection'
-import { customAlphabet } from 'nanoid'
-
-const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 7)
 
 interface NavHeaderProps {
   isProjectPage?: boolean
@@ -143,14 +137,6 @@ export function NavHeader({
   const [isDeploying, setIsDeploying] = useState(false)
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
   const [isRemixCopied, setIsRemixCopied] = useState(false)
-  const [isEditingDomain, setIsEditingDomain] = useState(false)
-  const [customDomain, setCustomDomain] = useState('')
-  const [isSavingDomain, setIsSavingDomain] = useState(false)
-  const [isDomainCopied, setIsDomainCopied] = useState(false)
-  const [isCheckingDomain, setIsCheckingDomain] = useState(false)
-  const [isDomainAvailable, setIsDomainAvailable] = useState<boolean | null>(null)
-  const [domainCheckTimeout, setDomainCheckTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
-  const [showDomainReplicating, setShowDomainReplicating] = useState(false)
   const { isProSubscriber, isLoading: isLoadingSubscription } =
     useSubscriptionStatus()
   const { resolvedTheme, setTheme, theme } = useTheme()
@@ -273,7 +259,7 @@ export function NavHeader({
     } else {
       // Default behavior
       if (target === 'x') {
-        window.open('https://x.com/capsulethis', '_blank')
+        window.open('https://x.com/rnvibecode', '_blank')
       } else if (target === 'discord') {
         window.open('', '_blank')
       }
@@ -381,7 +367,6 @@ export function NavHeader({
           platform: 'web',
           action: 'deploy',
           profile: 'preview',
-          customDomain: customDomain || generateSlug(projectTitle || 'my-app'),
         }),
       })
 
@@ -398,13 +383,8 @@ export function NavHeader({
             setCurrentProject({
               ...currentProject,
               deployedUrl: result.deploymentUrl,
-              customDomainUrl: result.customDomainUrl || currentProject.customDomainUrl,
               cloudflareProjectName: result.deploymentName || currentProject.cloudflareProjectName,
             })
-            // Also update the customDomain state to match
-            if (result.customDomainUrl) {
-              setCustomDomain(result.customDomainUrl)
-            }
           }
 
           // Notify parent component to refresh project data
@@ -423,14 +403,7 @@ export function NavHeader({
         // Deployment failed - show error and reset state
         console.error('Deployment failed:', result.error)
 
-        // Handle subdomain taken error specifically
-        if (result.code === 'SUBDOMAIN_TAKEN') {
-          setIsDomainAvailable(false)
-          setIsEditingDomain(true)
-          toast.error(result.error || 'This subdomain is already taken')
-        } else {
-          toast.error(`${isUpdate ? 'Update' : 'Publishing'} error: ${result.error || 'Deployment failed'}`)
-        }
+        toast.error(`${isUpdate ? 'Update' : 'Publishing'} error: ${result.error || 'Deployment failed'}`)
         setIsDeploying(false)
         return
       }
@@ -469,196 +442,7 @@ export function NavHeader({
     }
   }
 
-  // Helper function to generate a slug from project title
-  const generateSlug = (title: string) => {
-    return title
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-  }
 
-  // Initialize customDomain from project data or generate from title
-  // If generating from title, check availability and add nanoid if taken
-  useEffect(() => {
-    const initializeDomain = async () => {
-      if (currentProject) {
-        // If project already has a saved domain, use it (no need to check availability)
-        if (currentProject.customDomainUrl || currentProject.cloudflareProjectName) {
-          const domain = currentProject.customDomainUrl || currentProject.cloudflareProjectName
-          setCustomDomain(domain || '')
-          return
-        }
-
-        // Generate from title and check availability
-        if (currentProject.title) {
-          const sluggedTitle = generateSlug(currentProject.title)
-          await checkAndSetAvailableDomain(sluggedTitle)
-        }
-      } else if (projectTitle) {
-        // Fallback to prop if no currentProject yet
-        const sluggedTitle = generateSlug(projectTitle)
-        await checkAndSetAvailableDomain(sluggedTitle)
-      }
-    }
-
-    // Helper to check availability and append nanoid if taken
-    const checkAndSetAvailableDomain = async (baseDomain: string) => {
-      if (!baseDomain) return
-
-      try {
-        const response = await fetch(
-          `/api/subdomain/check?subdomain=${encodeURIComponent(baseDomain)}&projectId=${projectId || ''}`
-        )
-        const data = await response.json()
-
-        if (data.available) {
-          setCustomDomain(baseDomain)
-        } else {
-          // Domain is taken, append nanoid to make it unique
-          const uniqueDomain = `${baseDomain}-${nanoid()}`
-          setCustomDomain(uniqueDomain)
-        }
-      } catch (error) {
-        console.error('Error checking domain availability:', error)
-        // On error, use the base domain anyway
-        setCustomDomain(baseDomain)
-      }
-    }
-
-    initializeDomain()
-  }, [currentProject, projectTitle, projectId])
-
-  const handleCopyDomainUrl = async () => {
-    const domain = customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')
-    const url = `https://${domain}.capsulethis.app`
-
-    try {
-      await navigator.clipboard.writeText(url)
-      setIsDomainCopied(true)
-      toast.success('Domain URL copied to clipboard')
-      setTimeout(() => setIsDomainCopied(false), 2000)
-    } catch (error) {
-      toast.error('Failed to copy URL')
-    }
-  }
-
-  // Check subdomain availability with debounce
-  const checkSubdomainAvailability = async (subdomain: string) => {
-    if (!subdomain.trim()) {
-      setIsDomainAvailable(null)
-      return
-    }
-
-    // Skip check if it's the same as the current project's subdomain
-    if (subdomain === currentProject?.cloudflareProjectName) {
-      setIsDomainAvailable(true)
-      return
-    }
-
-    setIsCheckingDomain(true)
-    try {
-      const response = await fetch(
-        `/api/subdomain/check?subdomain=${encodeURIComponent(subdomain)}&projectId=${projectId || ''}`
-      )
-      const data = await response.json()
-      setIsDomainAvailable(data.available)
-    } catch (error) {
-      console.error('Error checking subdomain:', error)
-      setIsDomainAvailable(null)
-    } finally {
-      setIsCheckingDomain(false)
-    }
-  }
-
-  const handleDomainChange = (value: string) => {
-    const sanitized = value.toLowerCase().replace(/[^a-z0-9-]/g, '')
-    setCustomDomain(sanitized)
-    setIsDomainAvailable(null)
-
-    // Clear existing timeout
-    if (domainCheckTimeout) {
-      clearTimeout(domainCheckTimeout)
-    }
-
-    // Set new timeout for debounced check
-    const timeout = setTimeout(() => {
-      checkSubdomainAvailability(sanitized)
-    }, 500)
-    setDomainCheckTimeout(timeout)
-  }
-
-  const handleSaveDomain = async () => {
-    if (!projectId || !session?.user?.id) return
-
-    const trimmedDomain = customDomain.trim().toLowerCase()
-    if (!trimmedDomain) {
-      toast.error('Please enter a valid subdomain')
-      return
-    }
-
-    // Check availability one more time before saving
-    if (isDomainAvailable === false) {
-      toast.error('This subdomain is already taken')
-      return
-    }
-
-    setIsSavingDomain(true)
-    try {
-      // Verify availability before saving
-      const checkResponse = await fetch(
-        `/api/subdomain/check?subdomain=${encodeURIComponent(trimmedDomain)}&projectId=${projectId}`
-      )
-      const checkData = await checkResponse.json()
-
-      if (!checkData.available) {
-        setIsDomainAvailable(false)
-        toast.error('This subdomain is already taken')
-        setIsSavingDomain(false)
-        return
-      }
-
-      const response = await fetch(`/api/projects/${projectId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          customDomainUrl: trimmedDomain,
-          userID: session.user.id,
-        }),
-      })
-
-      if (response.ok) {
-        toast.success('Custom domain saved successfully')
-        setIsEditingDomain(false)
-        setIsDomainAvailable(null)
-        // Show replicating notice
-        setShowDomainReplicating(true)
-        // Auto-hide the notice after 60 seconds
-        setTimeout(() => setShowDomainReplicating(false), 60000)
-        if (currentProject) {
-          setCurrentProject({ ...currentProject, customDomainUrl: trimmedDomain })
-        }
-        // Update deployedUrl to reflect the new custom domain (only if project was already deployed)
-        if (currentProject?.cloudflareProjectName || currentProject?.deployedUrl || deployedUrl) {
-          setDeployedUrl(`https://${trimmedDomain}.capsulethis.app`)
-        }
-        // Notify parent component to refresh project data
-        if (onProjectRefresh) {
-          onProjectRefresh()
-        }
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to save custom domain')
-      }
-    } catch (error) {
-      console.error('Error saving custom domain:', error)
-      toast.error('Failed to save custom domain')
-    } finally {
-      setIsSavingDomain(false)
-    }
-  }
   if (isProjectPage) {
     // Project page layout - full header with all features
     return (
@@ -876,10 +660,8 @@ export function NavHeader({
                   <span className="hidden sm:inline">Download</span>
                 </Button>
 
-                {/* Publish HoverCard - always visible */}
-                <HoverCard noHover onOpenChange={(open) => {
-                  if (!open) setShowDomainReplicating(false)
-                }}>
+                {/* Publish HoverCard */}
+                <HoverCard noHover>
                   <HoverCardTrigger noHover asChild>
                     <Button
                       variant="ghost"
@@ -893,122 +675,45 @@ export function NavHeader({
                   <HoverCardContent noHover className="w-96" align="end">
                     <div className="space-y-3">
                       <div>
-                        <h4 className="font-semibold text-sm">Custom Domain</h4>
+                        <h4 className="font-semibold text-sm">Publish your app</h4>
                         <p className="text-sm text-muted-foreground">
-                          Set your app&apos;s custom subdomain
+                          Deploy your app to the web
                         </p>
                       </div>
-                      {showDomainReplicating && (
-                        <div className="bg-orange-100 dark:bg-orange-950 border border-orange-300 dark:border-orange-800 rounded-md px-3 py-2">
-                          <p className="text-xs text-orange-800 dark:text-orange-200">
-                            New subdomain is replicating on the system, it will be available in the next minute or so.
-                          </p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-muted rounded-md px-3 py-2 text-sm truncate font-mono">
+                          {currentProject?.cloudflareProjectName
+                            ? `${currentProject.cloudflareProjectName}.pages.dev`
+                            : deployedUrl
+                              ? deployedUrl.replace(/^https?:\/\//, '')
+                              : `${projectId}.pages.dev`}
                         </div>
-                      )}
-                      <div className="space-y-2">
-                        {isEditingDomain ? (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 flex items-center bg-muted rounded-md">
-                                <Input
-                                  value={customDomain}
-                                  onChange={(e) => handleDomainChange(e.target.value)}
-                                  className={`h-9 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 ${isDomainAvailable === false ? 'text-destructive' : ''
-                                    }`}
-                                  placeholder="your-app-name"
-                                  autoFocus
-                                />
-                                <span className="pr-3 text-sm text-muted-foreground whitespace-nowrap">.capsulethis.app</span>
-                              </div>
-                              <div className="flex items-center shrink-0 w-5">
-                                {isCheckingDomain && (
-                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                )}
-                                {!isCheckingDomain && isDomainAvailable === true && (
-                                  <Check className="h-4 w-4 text-green-500" />
-                                )}
-                                {!isCheckingDomain && isDomainAvailable === false && (
-                                  <AlertCircle className="h-4 w-4 text-destructive" />
-                                )}
-                              </div>
-                            </div>
-                            {isDomainAvailable === false && (
-                              <p className="text-xs text-destructive">
-                                This subdomain is already taken. Please choose a different name.
-                              </p>
-                            )}
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={handleSaveDomain}
-                                disabled={isSavingDomain || !customDomain.trim() || isDomainAvailable === false}
-                              >
-                                {isSavingDomain ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Check className="h-4 w-4 mr-2" />
-                                )}
-                                {isSavingDomain ? 'Saving...' : 'Save'}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => {
-                                  setIsEditingDomain(false)
-                                  setCustomDomain(currentProject?.customDomainUrl || currentProject?.cloudflareProjectName || '')
-                                  setIsDomainAvailable(null)
-                                }}
-                              >
-                                <X className="h-4 w-4 mr-2" />
-                                Cancel
-                              </Button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex-1 bg-muted rounded-md px-3 py-2 text-sm truncate font-mono">
-                              {customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')}.capsulethis.app
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={handleCopyDomainUrl}
-                              >
-                                {isDomainCopied ? (
-                                  <Check className="h-4 w-4 mr-2 text-green-500" />
-                                ) : (
-                                  <Copy className="h-4 w-4 mr-2" />
-                                )}
-                                Copy
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => {
-                                  setIsEditingDomain(true)
-                                  // Check current domain availability when entering edit mode
-                                  if (customDomain && customDomain !== currentProject?.cloudflareProjectName) {
-                                    checkSubdomainAvailability(customDomain)
-                                  }
-                                }}
-                              >
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Edit
-                              </Button>
-                            </div>
-                          </>
+                        {(currentProject?.cloudflareProjectName || deployedUrl) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            onClick={async () => {
+                              const url = currentProject?.cloudflareProjectName
+                                ? `https://${currentProject.cloudflareProjectName}.pages.dev`
+                                : deployedUrl
+                              if (!url) return
+                              try {
+                                await navigator.clipboard.writeText(url)
+                                toast.success('URL copied to clipboard')
+                              } catch {
+                                toast.error('Failed to copy URL')
+                              }
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
                       <Button
                         className="w-full"
                         onClick={handleDeploy}
-                        disabled={!projectId || !sandboxId || !session?.user?.id || isDeploying || (isEditingDomain && isDomainAvailable === false)}
+                        disabled={!projectId || !sandboxId || !session?.user?.id || isDeploying}
                       >
                         <Rocket className="h-4 w-4 mr-2" />
                         {isDeploying
@@ -1117,7 +822,7 @@ export function NavHeader({
                       Join us on Discord
                     </DropdownMenuItem> */}
                     <DropdownMenuItem onClick={() =>
-                      window.open('https://x.com/capsulethis', '_blank')
+                      window.open('https://x.com/rnvibecode', '_blank')
                     }>
                       <TwitterLogoIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                       Follow us on X
@@ -1375,7 +1080,7 @@ export function NavHeader({
                     Join us on Discord
                   </DropdownMenuItem> */}
                     <DropdownMenuItem onClick={() =>
-                      window.open('https://x.com/capsulethis', '_blank')
+                      window.open('https://x.com/rnvibecode', '_blank')
                     }>
                   <TwitterLogoIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                   Follow us on X
