@@ -9,6 +9,7 @@ import {
   varchar,
   json,
   jsonb,
+  integer,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { CONFIG } from '@react-native-vibe-code/config'
@@ -485,6 +486,24 @@ export const privacyPoliciesRelations = relations(privacyPolicies, ({ one }) => 
   }),
 }))
 
+// UI Prompts gallery table
+export const uiPrompts = pgTable('ui_prompts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  slug: varchar('slug', { length: 255 }).notNull().unique(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description').notNull(),
+  prompt: text('prompt').notNull(),
+  thumbnailUrl: text('thumbnail_url').notNull(),
+  screenshotUrls: json('screenshot_urls').$type<string[]>().default([]),
+  videoPreviewUrl: text('video_preview_url'),
+  remixUrl: text('remix_url'),
+  tags: json('tags').$type<string[]>().default([]),
+  viewCount: integer('view_count').default(0).notNull(),
+  featured: boolean('featured').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
 export type User = typeof user.$inferSelect
 export type Team = typeof teams.$inferSelect
 export type UserTeam = typeof usersTeams.$inferSelect
@@ -499,3 +518,5 @@ export type TwitterLink = typeof twitterLinks.$inferSelect
 export type XBotReply = typeof xBotReplies.$inferSelect
 export type XBotState = typeof xBotState.$inferSelect
 export type PrivacyPolicy = typeof privacyPolicies.$inferSelect
+export type UiPrompt = typeof uiPrompts.$inferSelect
+export type NewUiPrompt = typeof uiPrompts.$inferInsert

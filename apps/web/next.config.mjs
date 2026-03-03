@@ -21,6 +21,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'cdn-icons-png.flaticon.com',
       },
+      {
+        protocol: 'https',
+        hostname: '*.public.blob.vercel-storage.com',
+      },
     ],
   },
   async headers() {
