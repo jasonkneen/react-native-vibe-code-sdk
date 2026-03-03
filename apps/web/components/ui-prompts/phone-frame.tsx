@@ -22,7 +22,7 @@ export function PhoneFrame({ src, alt, className }: PhoneFrameProps) {
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-[90px] h-[28px] bg-black rounded-full" />
 
       {/* Status Bar */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-6 pt-3 pb-1">
+      <div className="hidden absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-6 pt-3 pb-1">
         {/* Time */}
         <span className="text-white text-xs font-semibold">9:41</span>
 

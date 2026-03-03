@@ -72,12 +72,25 @@ export function PromptDetail({ slug, isAuthenticated }: PromptDetailProps) {
 
       {/* Side-by-side Layout */}
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
-        {/* Left: Screenshot Gallery */}
-        <div className="lg:w-[60%]">
+        {/* Left: Video + Gallery */}
+        <div className="lg:w-[60%] flex flex-col sm:flex-row items-start gap-3">
+          {prompt.videoPreviewUrl && (
+            <div className="flex-shrink-0 flex justify-center">
+              <video
+                src={prompt.videoPreviewUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                controls
+                className="max-w-[280px] w-full rounded-[2rem] border-[3px] border-neutral-700 bg-black object-cover"
+                style={{ aspectRatio: "9 / 19.5" }}
+              />
+            </div>
+          )}
           <ScreenshotGallery
             screenshots={screenshots}
             title={prompt.title}
-            videoPreviewUrl={prompt.videoPreviewUrl}
           />
         </div>
 

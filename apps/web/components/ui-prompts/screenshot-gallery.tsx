@@ -8,13 +8,11 @@ import { Button } from "@/components/ui/button"
 interface ScreenshotGalleryProps {
   screenshots: string[]
   title: string
-  videoPreviewUrl?: string | null
 }
 
 export function ScreenshotGallery({
   screenshots,
   title,
-  videoPreviewUrl,
 }: ScreenshotGalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -76,16 +74,6 @@ export function ScreenshotGallery({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-      )}
-
-      {/* Video Preview */}
-      {videoPreviewUrl && (
-        <video
-          src={videoPreviewUrl}
-          controls
-          playsInline
-          className="w-full max-w-[400px] rounded-xl"
-        />
       )}
     </div>
   )
