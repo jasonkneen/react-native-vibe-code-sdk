@@ -26,6 +26,8 @@ import { useDevMode } from '@/context/dev-mode-context'
 import { useViewMode } from '@/context/view-mode-context'
 import { CodePanel } from '@/components/code-panel'
 import { ProjectHeaderActions } from '@/components/project-header-actions'
+import { AppStoreSubmissionsModal } from '@/components/app-store-submissions-modal'
+import { PublishAppStoreModal } from '@/components/publish-app-store-modal'
 import { Session } from '@/lib/auth'
 
 type ViewMode = 'mobile' | 'desktop' | 'both' | 'mobile-qr'
@@ -97,6 +99,8 @@ export function PreviewPanel({
   const maxRecreationRetries = 3
   const [isIframeLoading, setIsIframeLoading] = useState(true)
   const [iframeKey, setIframeKey] = useState(0) // Key to force iframe remount
+  const [showAppStoreSubmissions, setShowAppStoreSubmissions] = useState(false)
+  const [showPublishWizard, setShowPublishWizard] = useState(false)
   const [connectionRetryCount, setConnectionRetryCount] = useState(0)
   const maxConnectionRetries = 3
   // Set initial tab based on mobile view prop - on mobile devices, default to web if mobileView is 'web'
@@ -787,6 +791,7 @@ Run 'npm install react-native-gesture-handler' or 'yarn add react-native-gesture
             sandboxId={sandboxId}
             currentProject={currentProject}
             onProjectUpdate={onProjectUpdate}
+            onOpenAppStoreSubmissions={() => setShowAppStoreSubmissions(true)}
           />
         </div>
       </div>
@@ -1111,6 +1116,26 @@ Run 'npm install react-native-gesture-handler' or 'yarn add react-native-gesture
       <ExpoGoModal
         open={showExpoGoModal}
         onOpenChange={setShowExpoGoModal}
+      />
+
+      {/* App Store Submissions Modal */}
+      <AppStoreSubmissionsModal
+        open={showAppStoreSubmissions}
+        onOpenChange={setShowAppStoreSubmissions}
+        projectId={projectId || ''}
+        onNewSubmission={() => {
+          setShowAppStoreSubmissions(false)
+          setShowPublishWizard(true)
+        }}
+      />
+
+      {/* Publish to App Store Wizard */}
+      <PublishAppStoreModal
+        open={showPublishWizard}
+        onOpenChange={setShowPublishWizard}
+        projectId={projectId || ''}
+        projectName={projectTitle}
+        sandboxId={sandboxId || ''}
       />
     </div>
   )
