@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { connectSandbox } from '@/lib/sandbox-connect'
-import type { CommandHandle, Sandbox } from '@e2b/code-interpreter'
+import type { CommandHandle } from '@e2b/code-interpreter'
 
 export const maxDuration = 600 // 10 minutes for build+submit process
 
@@ -74,6 +74,38 @@ export async function POST(request: NextRequest) {
         }
 
         try {
+          // Phase 0: Patch app.json to avoid interactive prompts
+          sendEvent({
+            type: 'log',
+            data: '[Setup] Configuring app for production build...',
+          })
+
+          // Set usesNonExemptEncryption to avoid the encryption prompt
+          // and update bundleIdentifier / app name if provided
+          const patchScript = `
+            const fs = require('fs');
+            const configPath = '/home/user/app/app.json';
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            if (!config.expo) config.expo = {};
+            if (!config.expo.ios) config.expo.ios = {};
+            if (!config.expo.ios.infoPlist) config.expo.ios.infoPlist = {};
+            config.expo.ios.infoPlist.ITSAppUsesNonExemptEncryption = false;
+            ${appName ? `config.expo.name = ${JSON.stringify(appName)};` : ''}
+            ${bundleId ? `config.expo.ios.bundleIdentifier = ${JSON.stringify(bundleId)};` : ''}
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+            console.log('app.json patched successfully');
+          `.trim()
+
+          await sbx.commands.run(
+            `node -e ${shellEscape(patchScript)}`,
+            {
+              cwd: '/home/user/app',
+              timeoutMs: 10_000,
+              onStdout: (data: string) => sendEvent({ type: 'log', data }),
+              onStderr: (data: string) => sendEvent({ type: 'log', data }),
+            }
+          )
+
           // Phase 1: Initialize EAS project
           sendEvent({
             type: 'log',
@@ -112,21 +144,20 @@ export async function POST(request: NextRequest) {
             data: '[Phase 1] EAS project initialized successfully.',
           })
 
-          // Phase 2: Build and submit (interactive)
+          // Phase 2: Build and submit
           sendEvent({
             type: 'log',
             data: '[Phase 2] Starting EAS build + submit...',
           })
 
-          const buildCmd =
-            `export EXPO_TOKEN=${shellEscape(expoToken)}` +
-            (appleId
-              ? ` && export EXPO_APPLE_ID=${shellEscape(appleId)}`
-              : '') +
-            (applePassword
-              ? ` && export EXPO_APPLE_PASSWORD=${shellEscape(applePassword)}`
-              : '') +
-            ` && npx eas-cli@latest build -p ios --profile production --auto-submit`
+          const envVars = [
+            `export EXPO_TOKEN=${shellEscape(expoToken)}`,
+            `export EAS_BUILD_NO_EXPO_GO_WARNING=true`,
+            appleId ? `export EXPO_APPLE_ID=${shellEscape(appleId)}` : '',
+            applePassword ? `export EXPO_APPLE_PASSWORD=${shellEscape(applePassword)}` : '',
+          ].filter(Boolean).join(' && ')
+
+          const buildCmd = `${envVars} && npx eas-cli@latest build -p ios --profile production --auto-submit --non-interactive`
 
           // Use a mutable ref so callbacks can access the pid after handle is created
           const processRef: { pid: number | undefined } = { pid: undefined }
@@ -134,17 +165,16 @@ export async function POST(request: NextRequest) {
           const handle: CommandHandle = await sbx.commands.run(buildCmd, {
             cwd: '/home/user/app',
             background: true,
-            stdin: true,
             timeoutMs: 540_000, // 9 minutes
             onStdout: (data: string) => {
               handleOutput(data, sendEvent, submissionUrl, (url) => {
                 submissionUrl = url
-              }, sbx, processRef.pid)
+              })
             },
             onStderr: (data: string) => {
               handleOutput(data, sendEvent, submissionUrl, (url) => {
                 submissionUrl = url
-              }, sbx, processRef.pid)
+              })
             },
           })
 
@@ -213,15 +243,13 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Process output lines from the EAS CLI and detect interactive prompts.
+ * Process output lines from the EAS CLI and detect notable events.
  */
 function handleOutput(
   data: string,
   sendEvent: (event: Record<string, unknown>) => void,
   currentSubmissionUrl: string | null,
   setSubmissionUrl: (url: string) => void,
-  sbx?: Sandbox | null,
-  pid?: number
 ) {
   // Always send the raw log
   sendEvent({ type: 'log', data })
@@ -229,30 +257,6 @@ function handleOutput(
   // Check for login failure
   if (data.includes('Invalid username and password combination')) {
     sendEvent({ type: 'prompt', prompt: 'credentials_failed' })
-    // Automatically answer "no" to the retry prompt
-    if (sbx && pid !== undefined) {
-      sbx.commands.sendStdin(pid, 'no\n').catch(() => {
-        // Ignore errors if process already exited
-      })
-    }
-    return
-  }
-
-  // Check for 2FA method selection
-  if (
-    data.includes('want to validate your account') ||
-    data.includes('device / sms')
-  ) {
-    sendEvent({ type: 'prompt', prompt: '2fa_method' })
-    return
-  }
-
-  // Check for 2FA code entry
-  if (
-    data.includes('6 digit code') ||
-    (data.includes('Enter the') && data.includes('code'))
-  ) {
-    sendEvent({ type: 'prompt', prompt: '2fa_code' })
     return
   }
 
