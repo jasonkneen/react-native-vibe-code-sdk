@@ -1,6 +1,8 @@
 /* Chat Editor Styles */
 .chat-editor-content {
   min-height: 3rem;
+  max-height: 8rem;
+  overflow-y: auto;
   width: 100%;
   text-align: left;
 }
