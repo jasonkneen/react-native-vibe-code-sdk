@@ -636,7 +636,15 @@ export function PublishAppStoreModal({
                 open={show2FAMethod}
                 onSelect={(method) => {
                   setShow2FAMethod(false)
+                  // EAS CLI shows a toggle prompt "› device / sms"
+                  // that accepts the literal text "device" or "sms"
                   sendInput(method)
+                  // The code prompt always follows method selection.
+                  // Show the code modal after a short delay rather than
+                  // relying on detecting the code prompt from chunked PTY output.
+                  setTimeout(() => {
+                    setShow2FACode(true)
+                  }, 3000)
                 }}
               />
               <TwoFactorCodeModal

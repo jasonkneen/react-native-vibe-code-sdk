@@ -4,11 +4,15 @@ import { connectSandbox } from '@/lib/sandbox-connect'
 export const maxDuration = 600 // 10 minutes for build+submit process
 
 // Global map to store running PTY process PIDs keyed by sandboxId
-// so the input endpoint can write to stdin
-const runningProcesses = new Map<
-  string,
-  { pid: number; sandboxId: string }
->()
+// so the input endpoint can write to stdin.
+// Attach to globalThis so it survives HMR reloads in development.
+const globalForProcesses = globalThis as typeof globalThis & {
+  __easRunningProcesses?: Map<string, { pid: number; sandboxId: string }>
+}
+if (!globalForProcesses.__easRunningProcesses) {
+  globalForProcesses.__easRunningProcesses = new Map()
+}
+const runningProcesses = globalForProcesses.__easRunningProcesses
 
 // Export for use by the input route
 export { runningProcesses }
@@ -189,6 +193,13 @@ export async function POST(request: NextRequest) {
             }
           }
 
+          // Rolling buffer of recent PTY output so we can detect prompts
+          // that arrive split across multiple onData chunks.
+          let outputBuffer = ''
+          // Track which prompts we already fired to avoid duplicates
+          let firedMethod = false
+          let firedCode = false
+
           // Use PTY for the build command – this gives us a real terminal
           // so EAS CLI's interactive credential & 2FA prompts work properly
           const ptyHandle = await sbx.pty.create({
@@ -211,9 +222,20 @@ export async function POST(request: NextRequest) {
               // Skip lines that are just the export command being echoed
               if (cleanText.includes('export EXPO_TOKEN=') || cleanText.includes('export EXPO_APPLE_')) return
 
+              // Append to rolling buffer (keep last 1000 chars to match across chunks)
+              outputBuffer += cleanText
+              if (outputBuffer.length > 1000) {
+                outputBuffer = outputBuffer.slice(-1000)
+              }
+
               handleOutput(cleanText, sendEvent, submissionUrl, (url) => {
                 submissionUrl = url
-              }, autoRespond)
+              }, autoRespond, outputBuffer, {
+                firedMethod,
+                firedCode,
+                setFiredMethod: () => { firedMethod = true },
+                setFiredCode: () => { firedCode = true },
+              })
             },
           })
 
@@ -288,6 +310,8 @@ export async function POST(request: NextRequest) {
 
 /**
  * Process output lines from the EAS CLI and detect notable events.
+ * Uses both the current chunk and a rolling buffer to detect prompts
+ * that may arrive split across multiple PTY data events.
  */
 function handleOutput(
   data: string,
@@ -295,11 +319,20 @@ function handleOutput(
   currentSubmissionUrl: string | null,
   setSubmissionUrl: (url: string) => void,
   autoRespond?: (input: string) => Promise<void>,
+  outputBuffer?: string,
+  promptState?: {
+    firedMethod: boolean
+    firedCode: boolean
+    setFiredMethod: () => void
+    setFiredCode: () => void
+  },
 ) {
   // Always send the raw log
   sendEvent({ type: 'log', data })
 
   const lower = data.toLowerCase()
+  // Check both the current chunk and the rolling buffer for pattern matches
+  const bufferLower = (outputBuffer || data).toLowerCase()
 
   // Check for login failure
   if (data.includes('Invalid username and password combination')) {
@@ -308,28 +341,42 @@ function handleOutput(
   }
 
   // Detect Apple 2FA / two-step verification – method selection
-  if (
-    lower.includes('two-factor') ||
-    lower.includes('two-step') ||
-    lower.includes('verify your identity') ||
-    lower.includes('how do you want to verify')
-  ) {
-    sendEvent({ type: 'prompt', prompt: '2fa_method' })
-    return
+  if (!promptState?.firedMethod) {
+    if (
+      lower.includes('two-factor') ||
+      lower.includes('two-step') ||
+      lower.includes('verify your identity') ||
+      lower.includes('how do you want to verify') ||
+      lower.includes('how would you like to') ||
+      lower.includes('trusted phone') ||
+      lower.includes('sms to')
+    ) {
+      promptState?.setFiredMethod()
+      sendEvent({ type: 'prompt', prompt: '2fa_method' })
+      return
+    }
   }
 
-  // Detect 2FA code entry prompt
-  if (
-    lower.includes('enter the') && (lower.includes('digit code') || lower.includes('verification code'))
-  ) {
-    sendEvent({ type: 'prompt', prompt: '2fa_code' })
-    return
-  }
+  // Detect 2FA code entry prompt – check both current chunk AND buffer
+  // because the prompt text often arrives split across multiple PTY chunks
+  if (!promptState?.firedCode) {
+    const codeDetected =
+      // Current chunk matches
+      (lower.includes('enter the') && (lower.includes('digit code') || lower.includes('verification code'))) ||
+      /code\s*:\s*$/i.test(data.trim()) ||
+      lower.includes('please enter') && lower.includes('code') ||
+      lower.includes('security code') ||
+      lower.includes('type your verification') ||
+      // Buffer matches (catches prompts split across chunks)
+      (bufferLower.includes('enter the') && (bufferLower.includes('digit code') || bufferLower.includes('verification code'))) ||
+      /code\s*:\s*$/i.test((outputBuffer || '').trim()) ||
+      (bufferLower.includes('please enter') && bufferLower.includes('code') && !bufferLower.includes('how do you want'))
 
-  // Also detect generic "code:" prompt during 2FA
-  if (/code\s*:\s*$/i.test(data.trim())) {
-    sendEvent({ type: 'prompt', prompt: '2fa_code' })
-    return
+    if (codeDetected) {
+      promptState?.setFiredCode()
+      sendEvent({ type: 'prompt', prompt: '2fa_code' })
+      return
+    }
   }
 
   // Auto-respond to EAS interactive prompts
