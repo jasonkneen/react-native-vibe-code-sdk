@@ -71,6 +71,14 @@ export async function POST(request: NextRequest) {
             data: '[Setup] Configuring app for production build...',
           })
 
+          // Sanitize appName for Xcode target compatibility:
+          // expo.name and expo.slug must be lowercase alphanumeric so that
+          // expo prebuild and EAS "Configure Xcode project" derive the same target name.
+          // CFBundleDisplayName preserves the user-facing display name on device.
+          const sanitizedName = appName
+            ? appName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'app'
+            : ''
+
           const patchScript = `
             const fs = require('fs');
             const configPath = '/home/user/app/app.json';
@@ -79,8 +87,9 @@ export async function POST(request: NextRequest) {
             if (!config.expo.ios) config.expo.ios = {};
             if (!config.expo.ios.infoPlist) config.expo.ios.infoPlist = {};
             config.expo.ios.infoPlist.ITSAppUsesNonExemptEncryption = false;
-            ${appName ? `config.expo.name = ${JSON.stringify(appName)};` : ''}
-            ${appName ? `config.expo.slug = ${JSON.stringify(appName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))};` : ''}
+            ${appName ? `config.expo.name = ${JSON.stringify(sanitizedName)};` : ''}
+            ${appName ? `config.expo.slug = ${JSON.stringify(sanitizedName)};` : ''}
+            ${appName ? `config.expo.ios.infoPlist.CFBundleDisplayName = ${JSON.stringify(appName)};` : ''}
             ${bundleId ? `config.expo.ios.bundleIdentifier = ${JSON.stringify(bundleId)};` : ''}
             fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
             console.log('app.json patched successfully');
@@ -96,12 +105,23 @@ export async function POST(request: NextRequest) {
             }
           )
 
-          // Remove stale native project directories so EAS does a clean prebuild
-          // with the correct app name/slug as the Xcode target
-          await sbx.commands.run('rm -rf /home/user/app/ios /home/user/app/android', {
-            cwd: '/home/user/app',
-            timeoutMs: 10_000,
+          // Phase 0b: Remove stale native dirs so EAS runs a fresh prebuild
+          // on its servers using the patched app.json. This ensures the Xcode
+          // target name matches the current expo.name/slug (see EAS CLI #1357).
+          sendEvent({
+            type: 'log',
+            data: '[Setup] Removing stale native directories...',
           })
+
+          await sbx.commands.run(
+            `rm -rf /home/user/app/ios /home/user/app/android /home/user/app/.expo`,
+            {
+              cwd: '/home/user/app',
+              timeoutMs: 10_000,
+              onStdout: (data: string) => sendEvent({ type: 'log', data }),
+              onStderr: (data: string) => sendEvent({ type: 'log', data }),
+            }
+          )
 
           // Phase 1: Initialize EAS project (non-interactive is fine here)
           sendEvent({
