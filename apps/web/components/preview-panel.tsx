@@ -995,7 +995,17 @@ Run 'npm install react-native-gesture-handler' or 'yarn add react-native-gesture
                           <circle cx="12" cy="12" r="10" strokeWidth="2"/>
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16v-4m0-4h.01"/>
                         </svg>
-                        <span>Your browser does not have all of features that phones support.</span>
+                        <span>QR code does not work without Expo Go app installed on your phone.</span>
+                      </p>
+                    </div>
+
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-3 border border-muted max-w-[270px]">
+                      <p className="text-sm text-muted-foreground flex items-start gap-2">
+                        <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16v-4m0-4h.01"/>
+                        </svg>
+                        <span>Your browser does not have all of the features that phones support.</span>
                       </p>
                       <p className="text-sm text-muted-foreground pl-7">
                         For the full experience, test your app on your phone using the Expo Go app.
