@@ -42,11 +42,15 @@ export class OpenCodeService {
     console.log('[OpenCode Service] Starting OpenCode server...')
 
     // Write opencode config
+    // Note: OpenCode auto-detects ANTHROPIC_API_KEY from env vars,
+    // but we also set it explicitly in the provider options for reliability.
     const config = {
       $schema: 'https://opencode.ai/config.json',
       provider: {
         anthropic: {
-          api_key: process.env.ANTHROPIC_API_KEY || '',
+          options: {
+            apiKey: process.env.ANTHROPIC_API_KEY || '',
+          },
         },
       },
       model: model || 'anthropic/claude-sonnet-4-5',

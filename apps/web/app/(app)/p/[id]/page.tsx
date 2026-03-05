@@ -96,12 +96,20 @@ function ProjectPageInternal() {
   const modelFromUrl = searchParams?.get('model') || null
   const imageUrlsFromUrl = searchParams?.get('imageUrls') || null
   const skillsFromUrl = searchParams?.get('skills') || null
+  const agentTypeFromUrl = searchParams?.get('agentType') || null
 
   // Claude model selection with localStorage persistence
   const { selectedModel, setSelectedModel } = useClaudeModel()
 
   // Agent type selection (claude-code or opencode)
   const { agentType, setAgentType, getDefaultModelForAgent } = useAgentType()
+
+  // Initialize agent type from URL if coming from home page
+  useEffect(() => {
+    if (agentTypeFromUrl && (agentTypeFromUrl === 'opencode' || agentTypeFromUrl === 'claude-code')) {
+      setAgentType(agentTypeFromUrl)
+    }
+  }, [agentTypeFromUrl, setAgentType])
 
   // Initialize model from URL if coming from home page
   useEffect(() => {

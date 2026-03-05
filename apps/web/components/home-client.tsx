@@ -6,6 +6,7 @@ import { ImageAttachment } from '@/components/chat-panel-input'
 import { NavHeader } from '@/components/nav-header'
 import { useToast } from '@/components/ui/use-toast'
 import { useClaudeModel } from '@/hooks/use-claude-model'
+import { useAgentType } from '@/hooks/use-agent-type'
 import { useCookieStorage } from '@/hooks/useCookieStorage'
 import { signOut } from '@/lib/auth/client'
 import { LLMModelConfig } from '@/lib/models'
@@ -57,6 +58,7 @@ export function HomeClient({ initialSession }: HomeClientProps) {
   const posthog = usePostHog()
   const [isAuthDialogOpen, setAuthDialog] = useState(false)
   const { selectedModel, setSelectedModel } = useClaudeModel()
+  const { agentType, setAgentType, getDefaultModelForAgent } = useAgentType()
 
   // Handle ui-prompt query param to pre-fill chat input
   useEffect(() => {
@@ -125,6 +127,7 @@ export function HomeClient({ initialSession }: HomeClientProps) {
       firstMessage: chatInput,
       template: selectedTemplate,
       model: selectedModel,
+      ...(agentType !== 'claude-code' ? { agentType } : {}),
     })
 
     // Add skills to query params if any are selected
@@ -277,6 +280,11 @@ export function HomeClient({ initialSession }: HomeClientProps) {
                 isAuthenticated={!!initialSession}
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
+                agentType={agentType}
+                onAgentTypeChange={(newType) => {
+                  setAgentType(newType)
+                  setSelectedModel(getDefaultModelForAgent(newType))
+                }}
                 onSkillsChange={setSelectedSkills}
               />
             </div>
@@ -313,6 +321,11 @@ export function HomeClient({ initialSession }: HomeClientProps) {
                 isAuthenticated={!!initialSession}
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
+                agentType={agentType}
+                onAgentTypeChange={(newType) => {
+                  setAgentType(newType)
+                  setSelectedModel(getDefaultModelForAgent(newType))
+                }}
                 onSkillsChange={setSelectedSkills}
               />
             </div>
