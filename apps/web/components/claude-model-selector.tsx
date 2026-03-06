@@ -171,8 +171,10 @@ function CompactSelector({
           className="h-10 text-xs border-gray-200 gap-1.5"
         >
           <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="hidden sm:inline">{getClaudeModelById(resolvedValue)?.name || models[0]?.name}</span>
-          <span className="sm:hidden">AI</span>
+          <span className="hidden sm:inline">
+            {agentType === 'opencode' ? 'OpenCode' : 'Claude Code'} · {getClaudeModelById(resolvedValue)?.name || models[0]?.name}
+          </span>
+          <span className="sm:hidden">{agentType === 'opencode' ? 'OC' : 'CC'}</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[360px]">

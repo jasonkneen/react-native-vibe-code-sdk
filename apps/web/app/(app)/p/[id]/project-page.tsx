@@ -102,7 +102,10 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
   const { selectedModel, setSelectedModel } = useClaudeModel()
 
   // Agent type selection (claude-code or opencode)
-  const { agentType, setAgentType } = useAgentType()
+  const { agentType: storedAgentType, setAgentType } = useAgentType()
+
+  // When opencode flag is disabled, always force claude-code
+  const agentType = opencodeEnabled ? storedAgentType : 'claude-code'
 
   // Initialize agent type from URL if coming from home page
   useEffect(() => {

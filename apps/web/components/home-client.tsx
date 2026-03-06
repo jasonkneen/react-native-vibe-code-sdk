@@ -59,7 +59,10 @@ export function HomeClient({ initialSession, opencodeEnabled = false }: HomeClie
   const posthog = usePostHog()
   const [isAuthDialogOpen, setAuthDialog] = useState(false)
   const { selectedModel, setSelectedModel } = useClaudeModel()
-  const { agentType, setAgentType, getDefaultModelForAgent } = useAgentType()
+  const { agentType: storedAgentType, setAgentType, getDefaultModelForAgent } = useAgentType()
+
+  // When opencode flag is disabled, always force claude-code
+  const agentType = opencodeEnabled ? storedAgentType : 'claude-code'
 
   // Handle ui-prompt query param to pre-fill chat input
   useEffect(() => {
