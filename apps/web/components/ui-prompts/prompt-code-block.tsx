@@ -65,7 +65,7 @@ export function PromptCodeBlock({
       </div>
 
       {/* Prompt Content */}
-      <pre className="p-4 text-sm text-foreground/80 whitespace-pre-wrap overflow-auto max-h-[400px] leading-relaxed">
+      <pre className="p-4 text-sm text-foreground/80 whitespace-pre-wrap overflow-auto max-h-[225px] leading-relaxed">
         {prompt}
       </pre>
     </div>

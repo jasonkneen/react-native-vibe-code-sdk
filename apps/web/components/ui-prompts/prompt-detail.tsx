@@ -75,7 +75,7 @@ export function PromptDetail({ slug, isAuthenticated }: PromptDetailProps) {
         {/* Left: Video + Gallery */}
         <div className="lg:w-[60%] flex flex-col sm:flex-row items-start gap-3">
           {prompt.videoPreviewUrl && (
-            <div className="flex-shrink-0 flex justify-center">
+            <div className="flex-1 min-w-0 flex justify-center">
               <video
                 src={prompt.videoPreviewUrl}
                 autoPlay
@@ -88,10 +88,12 @@ export function PromptDetail({ slug, isAuthenticated }: PromptDetailProps) {
               />
             </div>
           )}
-          <ScreenshotGallery
-            screenshots={screenshots}
-            title={prompt.title}
-          />
+          <div className="flex-1 min-w-0">
+            <ScreenshotGallery
+              screenshots={screenshots}
+              title={prompt.title}
+            />
+          </div>
         </div>
 
         {/* Right: Details */}
