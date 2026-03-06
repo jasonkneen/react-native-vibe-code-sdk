@@ -123,6 +123,10 @@ export function translateOpenCodeEvent(event: OpenCodeEvent): SlimMessage[] {
     case 'tui.toast.show':
     case 'tui.session.select':
     case 'session.deleted':
+    case 'session.updated':
+    case 'session.diff':
+    case 'message.part.delta':
+    case 'message.part.updated':
       return []
 
     default:
@@ -219,7 +223,14 @@ export function parseSSELine(line: string): OpenCodeEvent | null {
   if (!jsonStr) return null
 
   try {
-    return JSON.parse(jsonStr)
+    const parsed = JSON.parse(jsonStr)
+    // OpenCode wraps events in a payload envelope:
+    // { directory: "...", payload: { type: "message.updated", properties: {...} } }
+    // Unwrap the payload so the rest of the code sees { type, properties } directly.
+    if (parsed.payload && parsed.payload.type) {
+      return parsed.payload as OpenCodeEvent
+    }
+    return parsed
   } catch {
     return null
   }
