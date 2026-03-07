@@ -135,8 +135,10 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
     errorModalData,
     handleCloseModal: handleCloseErrorModal,
     handleSendToFix: handleSendToFixFromModal
-  } = useErrorNotifications(projectId || null, (errorMessage: string) => {
-    handleSendToFixRef.current?.(errorMessage)
+  } = useErrorNotifications(projectId || null, {
+    onSendToFix: (errorMessage: string) => {
+      handleSendToFixRef.current?.(errorMessage)
+    },
   })
 
   // Expose project ID globally for search functionality
@@ -216,6 +218,7 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
     messages,
     input,
     handleInputChange,
+    setInput,
     handleSubmit,
     setMessages,
     append,
@@ -455,17 +458,9 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
   // Set up the handleSendToFix function after useChat is initialized
   useEffect(() => {
     handleSendToFixRef.current = (errorMessage: string) => {
-      // Create a synthetic event to set the input value
-      if (typeof handleInputChange === 'function') {
-        const event = {
-          target: { value: errorMessage },
-        } as React.ChangeEvent<HTMLInputElement>
-        handleInputChange(event)
-      } else {
-        console.warn('[ProjectPage] handleSendToFix: handleInputChange is not a function')
-      }
+      setInput(errorMessage)
     }
-  }, [handleInputChange])
+  }, [setInput])
 
   // Reset history loaded state when projectId changes
   useEffect(() => {

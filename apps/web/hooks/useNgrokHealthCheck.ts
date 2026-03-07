@@ -5,13 +5,11 @@ import { toast } from 'sonner'
 
 interface NgrokHealthState {
   primaryPort: 8081
-  backupPort: 8082
-  activePorts: Set<number>
   ngrokStatus: {
     [port: number]: 'connected' | 'disconnected' | 'unknown'
   }
-  isBackupActive: boolean
-  isStartingBackup: boolean
+  isRecoveryActive: boolean
+  isStartingRecovery: boolean
   lastHealthCheck: Date | null
 }
 
@@ -37,7 +35,6 @@ interface UseNgrokHealthCheckReturn {
 }
 
 const PRIMARY_PORT = 8081
-const BACKUP_PORT = 8082
 const DEFAULT_POLLING_INTERVAL = 60000 // 60 seconds
 
 export function useNgrokHealthCheck({
@@ -53,14 +50,11 @@ export function useNgrokHealthCheck({
 }: UseNgrokHealthCheckOptions): UseNgrokHealthCheckReturn {
   const [healthState, setHealthState] = useState<NgrokHealthState>({
     primaryPort: PRIMARY_PORT,
-    backupPort: BACKUP_PORT,
-    activePorts: new Set([PRIMARY_PORT]),
     ngrokStatus: {
       [PRIMARY_PORT]: 'unknown',
-      [BACKUP_PORT]: 'unknown',
     },
-    isBackupActive: false,
-    isStartingBackup: false,
+    isRecoveryActive: false,
+    isStartingRecovery: false,
     lastHealthCheck: null,
   })
 
@@ -98,10 +92,7 @@ export function useNgrokHealthCheck({
     try {
       console.log('[useNgrokHealthCheck] Checking ngrok health...')
 
-      // In LAN mode, always check PRIMARY_PORT since there's no backup Expo server
-      const checkPort = tunnelMode === 'lan'
-        ? PRIMARY_PORT
-        : (healthState.isBackupActive ? BACKUP_PORT : PRIMARY_PORT)
+      const checkPort = PRIMARY_PORT
 
       const response = await fetch('/api/check-ngrok-health', {
         method: 'POST',
@@ -121,7 +112,7 @@ export function useNgrokHealthCheck({
         lastHealthCheck: new Date(),
         ngrokStatus: {
           ...prev.ngrokStatus,
-          [prev.isBackupActive ? BACKUP_PORT : PRIMARY_PORT]: data.tunnelStatus,
+          [PRIMARY_PORT]: data.tunnelStatus,
         },
       }))
 
@@ -139,7 +130,7 @@ export function useNgrokHealthCheck({
     } finally {
       isCheckingRef.current = false
     }
-  }, [sandboxId, ngrokUrl, healthState.isBackupActive, tunnelMode])
+  }, [sandboxId, ngrokUrl, tunnelMode])
 
   const triggerBackupServer = useCallback(async () => {
     if (!sandboxId || !projectId || !userId) {
@@ -147,13 +138,13 @@ export function useNgrokHealthCheck({
       return
     }
 
-    setHealthState(prev => ({ ...prev, isStartingBackup: true }))
-    showDevToast('Ngrok tunnel disconnected, starting backup server...', 'warning')
+    setHealthState(prev => ({ ...prev, isStartingRecovery: true }))
+    showDevToast('Ngrok tunnel disconnected, restarting server...', 'warning')
 
     try {
-      console.log('[useNgrokHealthCheck] Starting backup server...')
+      console.log('[useNgrokHealthCheck] Restarting server...')
 
-      const action = healthState.isBackupActive ? 'cleanup_and_restart' : 'start_backup'
+      const action = healthState.isRecoveryActive ? 'cleanup_and_restart' : 'start_backup'
 
       const response = await fetch('/api/ngrok-backup-server', {
         method: 'POST',
@@ -173,16 +164,15 @@ export function useNgrokHealthCheck({
       if (data.success) {
         setHealthState(prev => ({
           ...prev,
-          isBackupActive: true,
-          isStartingBackup: false,
-          activePorts: new Set([...prev.activePorts, BACKUP_PORT]),
+          isRecoveryActive: true,
+          isStartingRecovery: false,
           ngrokStatus: {
             ...prev.ngrokStatus,
-            [BACKUP_PORT]: 'connected',
+            [PRIMARY_PORT]: 'connected',
           },
         }))
         consecutiveFailuresRef.current = 0
-        showDevToast('Backup Expo server is now running', 'success')
+        showDevToast('Server restarted successfully', 'success')
 
         // Also show in production for important events
         toast.success('Ngrok tunnel reconnected successfully')
@@ -193,21 +183,21 @@ export function useNgrokHealthCheck({
           onBackupServerReady(data.sandboxUrl, data.ngrokUrl)
         }
       } else {
-        setHealthState(prev => ({ ...prev, isStartingBackup: false }))
-        showDevToast(`Failed to start backup server: ${data.error}`, 'error')
+        setHealthState(prev => ({ ...prev, isStartingRecovery: false }))
+        showDevToast(`Failed to restart server: ${data.error}`, 'error')
 
         // Show error to user in production too
         toast.error(`Ngrok tunnel recovery failed: ${data.error || 'Unknown error'}. Please refresh the page.`)
       }
     } catch (error) {
-      console.error('[useNgrokHealthCheck] Failed to start backup server:', error)
-      setHealthState(prev => ({ ...prev, isStartingBackup: false }))
-      showDevToast('Failed to start backup server', 'error')
+      console.error('[useNgrokHealthCheck] Failed to restart server:', error)
+      setHealthState(prev => ({ ...prev, isStartingRecovery: false }))
+      showDevToast('Failed to restart server', 'error')
 
       // Show error to user in production too
       toast.error('Failed to recover ngrok tunnel. Please refresh the page.')
     }
-  }, [sandboxId, projectId, userId, healthState.isBackupActive, showDevToast, onBackupServerReady, tunnelMode])
+  }, [sandboxId, projectId, userId, healthState.isRecoveryActive, showDevToast, onBackupServerReady, tunnelMode])
 
   // Main polling effect - only starts after serverReady is true
   useEffect(() => {
@@ -225,7 +215,7 @@ export function useNgrokHealthCheck({
     const performHealthCheck = async () => {
       const isHealthy = await checkNgrokHealth()
 
-      if (!isHealthy && !healthState.isStartingBackup) {
+      if (!isHealthy && !healthState.isStartingRecovery) {
         console.log('[useNgrokHealthCheck] Ngrok unhealthy, consecutive failures:', consecutiveFailuresRef.current)
 
         // Trigger backup after 3 consecutive failures to avoid false positives
@@ -255,17 +245,15 @@ export function useNgrokHealthCheck({
       }
       console.log('[useNgrokHealthCheck] Stopped polling')
     }
-  }, [enabled, sandboxId, ngrokUrl, serverReady, pollingInterval, checkNgrokHealth, triggerBackupServer, healthState.isStartingBackup, tunnelMode])
+  }, [enabled, sandboxId, ngrokUrl, serverReady, pollingInterval, checkNgrokHealth, triggerBackupServer, healthState.isStartingRecovery, tunnelMode])
 
-  const isNgrokHealthy = healthState.isBackupActive
-    ? healthState.ngrokStatus[BACKUP_PORT] === 'connected'
-    : healthState.ngrokStatus[PRIMARY_PORT] === 'connected'
+  const isNgrokHealthy = healthState.ngrokStatus[PRIMARY_PORT] === 'connected'
 
   return {
     healthState,
     isNgrokHealthy,
-    isBackupActive: healthState.isBackupActive,
-    isStartingBackup: healthState.isStartingBackup,
+    isBackupActive: healthState.isRecoveryActive,
+    isStartingBackup: healthState.isStartingRecovery,
     checkNgrokHealth,
     triggerBackupServer,
   }

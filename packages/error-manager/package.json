@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@react-native-vibe-code/pusher": "workspace:*",
-    "sonner": "^1.5.0"
+    "sonner": "^2.0.6"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0"
