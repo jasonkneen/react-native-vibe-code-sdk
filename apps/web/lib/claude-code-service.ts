@@ -132,6 +132,7 @@ export class ClaudeCodeService {
 
       let completionDetected = false
       const sdkErrors: string[] = [] // Collect SDK errors, only send after completion
+      const expoErrors: string[] = [] // Collect Expo/Metro errors to send after completion
       let capturedSessionId: string | null = null
 
       // Line buffering to handle partial stdout chunks
@@ -310,6 +311,17 @@ export class ClaudeCodeService {
               )
               // Store error but don't send yet - wait for task completion
               sdkErrors.push(data)
+            } else if (isExpoServerError && (
+              data.includes('SyntaxError') ||
+              data.includes('TypeError') ||
+              data.includes('ReferenceError') ||
+              data.includes('Bundling failed') ||
+              data.includes('BUNDLE') && data.includes('failed') ||
+              data.includes('ERROR') && !data.includes('error-overlay')
+            )) {
+              // Capture Expo/Metro build errors to send after completion
+              console.log('[Claude Code Service] Expo error detected (storing):', data.substring(0, 150))
+              expoErrors.push(data)
             } else {
               // Log non-error stdout for debugging
               if (data.trim() && !isExpoServerError) {
@@ -536,10 +548,29 @@ export class ClaudeCodeService {
             timestamp: new Date().toISOString(),
             projectId: request.projectId,
             type: 'sdk-error',
+            source: 'claude-sdk',
           })
           console.log(`[Claude Code Service] SDK error notification sent to channel: ${channelName}`)
         } catch (pusherError) {
           console.error('[Claude Code Service] Failed to send Pusher notification:', pusherError)
+        }
+      }
+
+      // Send Expo/Metro build errors if any were captured during agent execution
+      if (expoErrors.length > 0) {
+        console.log('[Claude Code Service] Sending Expo build errors to frontend:', expoErrors.length)
+        try {
+          const channelName = `${request.projectId}-errors`
+          pusherServer.trigger(channelName, 'error-notification', {
+            message: expoErrors.join('\n'),
+            timestamp: new Date().toISOString(),
+            projectId: request.projectId,
+            type: 'runtime-error',
+            source: 'expo-server',
+          })
+          console.log(`[Claude Code Service] Expo error notification sent to channel: ${channelName}`)
+        } catch (pusherError) {
+          console.error('[Claude Code Service] Failed to send Expo error notification:', pusherError)
         }
       }
 

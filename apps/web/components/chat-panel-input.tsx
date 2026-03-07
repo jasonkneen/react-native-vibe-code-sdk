@@ -118,7 +118,16 @@ export const ChatPanelInput = memo(function ChatPanelInput({
   const keepAliveInterval = useRef<any>()
   const baseInputRef = useRef<string>('')
   const recordSoundRef = useRef<HTMLAudioElement | null>(null)
-  
+  const lastEditorContentRef = useRef<string>('')
+
+  // Sync external input changes (e.g., from "Send to Fix") into the TipTap editor
+  useEffect(() => {
+    if (input && input !== lastEditorContentRef.current) {
+      editorRef.current?.setContent(input)
+      lastEditorContentRef.current = input
+    }
+  }, [input])
+
   const { connection, connectToDeepgram, disconnectFromDeepgram, connectionState } = useDeepgram()
   const { setupMicrophone, microphone, startMicrophone, stopMicrophone, microphoneState } = useMicrophone()
   const { registerShortcut, unregisterShortcut } = useKeyboardShortcuts()
@@ -507,6 +516,7 @@ export const ChatPanelInput = memo(function ChatPanelInput({
 
     // Clear the TipTap editor content
     editorRef.current?.clearContent()
+    lastEditorContentRef.current = ''
 
     // Clear image attachments immediately on submit (not in onFinish)
     // This is safe now because experimental_prepareRequestBody checks the message's
@@ -640,6 +650,7 @@ export const ChatPanelInput = memo(function ChatPanelInput({
                   }
                   disabled={isLoading}
                   onContentChange={(text, skills) => {
+                    lastEditorContentRef.current = text
                     const event = {
                       target: { value: text },
                     } as React.ChangeEvent<HTMLTextAreaElement>

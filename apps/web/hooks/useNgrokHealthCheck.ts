@@ -22,6 +22,7 @@ interface UseNgrokHealthCheckOptions {
   serverReady?: boolean // Only start health checks after initial server setup is complete
   pollingInterval?: number // Default: 60000ms (60 seconds)
   onBackupServerReady?: (newSandboxUrl: string, newNgrokUrl: string) => void // Callback when backup server starts with new URL
+  onExpoError?: (errorMessage: string) => void // Callback when Expo app has a build error
   tunnelMode?: string // 'ngrok-patch' or 'lan'
 }
 
@@ -46,6 +47,7 @@ export function useNgrokHealthCheck({
   serverReady = false,
   pollingInterval = DEFAULT_POLLING_INTERVAL,
   onBackupServerReady,
+  onExpoError,
   tunnelMode = 'ngrok-patch',
 }: UseNgrokHealthCheckOptions): UseNgrokHealthCheckReturn {
   const [healthState, setHealthState] = useState<NgrokHealthState>({
@@ -116,6 +118,12 @@ export function useNgrokHealthCheck({
         },
       }))
 
+      // If the health check detected an Expo error page, notify the caller
+      if (data.expoError && onExpoError) {
+        console.log('[useNgrokHealthCheck] Expo error detected:', data.expoError.substring(0, 100))
+        onExpoError(data.expoError)
+      }
+
       if (data.isAlive) {
         consecutiveFailuresRef.current = 0
         return true
@@ -130,7 +138,7 @@ export function useNgrokHealthCheck({
     } finally {
       isCheckingRef.current = false
     }
-  }, [sandboxId, ngrokUrl, tunnelMode])
+  }, [sandboxId, ngrokUrl, tunnelMode, onExpoError])
 
   const triggerBackupServer = useCallback(async () => {
     if (!sandboxId || !projectId || !userId) {

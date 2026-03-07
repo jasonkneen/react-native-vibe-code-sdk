@@ -40,6 +40,7 @@ import { useAgentType } from '@/hooks/use-agent-type'
 import { resolveModelForAgent } from '@/lib/claude-models'
 import { v4 as uuidv4 } from 'uuid'
 import { useErrorNotifications } from '@/hooks/useErrorNotifications'
+import { ErrorNotificationCard } from '@/components/error-notification-card'
 import { useNgrokHealthCheck } from '@/hooks/useNgrokHealthCheck'
 import { useStreamRecovery } from '@/hooks/useStreamRecovery'
 import { searchService } from '@/lib/search-service'
@@ -131,15 +132,19 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
 
   // Set up error notifications for this project with send to fix handler
   const {
-    isModalOpen: isErrorModalOpen,
-    errorModalData,
-    handleCloseModal: handleCloseErrorModal,
-    handleSendToFix: handleSendToFixFromModal
+    latestError,
+    dismissError,
+    reportError,
+    handleSendToFix: handleSendToFixFromHook
   } = useErrorNotifications(projectId || null, {
     onSendToFix: (errorMessage: string) => {
       handleSendToFixRef.current?.(errorMessage)
     },
   })
+
+  // Error details modal state (managed here, not in hook)
+  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false)
+  const [errorModalData, setErrorModalData] = useState<{ message: string; timestamp: string; projectId: string } | null>(null)
 
   // Expose project ID globally for search functionality
   useEffect(() => {
@@ -547,6 +552,10 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
     serverReady: !!(result as any)?.url && !isPreviewLoading, // Only start after initial server is ready
     pollingInterval: 60000, // 60 seconds
     tunnelMode: (result as any)?.tunnelMode || 'ngrok-patch',
+    // When health check detects an Expo error page, report it
+    onExpoError: (errorMessage: string) => {
+      reportError(errorMessage)
+    },
     // When backup server starts successfully, update the preview URL
     onBackupServerReady: (newSandboxUrl, newNgrokUrl) => {
       console.log('[Project] Backup server ready, updating preview URL:', newSandboxUrl)
@@ -2404,38 +2413,53 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
               }}
             />
             {mobileActivePanel === 'chat' ? (
-              <ChatPanel
-                key={chatKey}
-                status={streamStatus}
-                messages={messages}
-                input={input}
-                handleInputChange={handleChatInputChange}
-                handleSubmit={handleSubmitAuth}
-                isLoading={isChatLoading}
-                projectTitle={currentProject?.title || undefined}
-                currentTemplate={
-                  currentProject?.template || templateFromUrl || selectedTemplate
-                }
-                sandboxId={currentProject?.sandboxId || undefined}
-                pendingEditData={pendingEditData}
-                projectId={projectId}
-                userId={session?.user?.id}
-                isRetrying={isRetrying}
-                retryCount={retryCount}
-                isWaitingForFirstMessage={!!firstMessageRef.current && messages.length === 0}
-                selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
-                agentType={agentType}
-                onAgentTypeChange={opencodeEnabled ? setAgentType : undefined}
-                imageAttachments={imageAttachments}
-                onImageAttachmentsChange={setImageAttachments}
-                selectedSkills={selectedSkills}
-                onSelectedSkillsChange={setSelectedSkills}
-                cloudEnabled={cloudEnabled}
-                isCloudPanelOpen={mobileSidebarPanel === 'cloud'}
-                onCloudPanelOpen={() => setMobileSidebarPanel('cloud')}
-                onCloudPanelClose={() => setMobileSidebarPanel(null)}
-              />
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-hidden">
+                  <ChatPanel
+                    key={chatKey}
+                    status={streamStatus}
+                    messages={messages}
+                    input={input}
+                    handleInputChange={handleChatInputChange}
+                    handleSubmit={handleSubmitAuth}
+                    isLoading={isChatLoading}
+                    projectTitle={currentProject?.title || undefined}
+                    currentTemplate={
+                      currentProject?.template || templateFromUrl || selectedTemplate
+                    }
+                    sandboxId={currentProject?.sandboxId || undefined}
+                    pendingEditData={pendingEditData}
+                    projectId={projectId}
+                    userId={session?.user?.id}
+                    isRetrying={isRetrying}
+                    retryCount={retryCount}
+                    isWaitingForFirstMessage={!!firstMessageRef.current && messages.length === 0}
+                    selectedModel={selectedModel}
+                    onModelChange={setSelectedModel}
+                    agentType={agentType}
+                    onAgentTypeChange={opencodeEnabled ? setAgentType : undefined}
+                    imageAttachments={imageAttachments}
+                    onImageAttachmentsChange={setImageAttachments}
+                    selectedSkills={selectedSkills}
+                    onSelectedSkillsChange={setSelectedSkills}
+                    cloudEnabled={cloudEnabled}
+                    isCloudPanelOpen={mobileSidebarPanel === 'cloud'}
+                    onCloudPanelOpen={() => setMobileSidebarPanel('cloud')}
+                    onCloudPanelClose={() => setMobileSidebarPanel(null)}
+                  />
+                </div>
+                {latestError && (
+                  <ErrorNotificationCard
+                    error={latestError}
+                    onDismiss={dismissError}
+                    onSendToFix={handleSendToFixFromHook}
+                    onViewDetails={() => {
+                      setErrorModalData({ message: latestError.message, timestamp: latestError.timestamp, projectId: latestError.projectId })
+                      setIsErrorModalOpen(true)
+                    }}
+                  />
+                )}
+              </div>
             ) : (
               <PreviewPanel
                 key={`preview-${previewKey}`}
@@ -2501,39 +2525,52 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
                 <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="panel">History</TabsTrigger>
               </TabsList>
-              <TabsContent value="chat" className="flex-1 m-0 overflow-hidden">
-                <ChatPanel
-                  key={chatKey}
-                  status={streamStatus}
-                  messages={messages}
-                  input={input}
-                  handleInputChange={handleChatInputChange}
-                  handleSubmit={handleSubmitAuth}
-                  isLoading={isChatLoading}
-                  projectTitle={currentProject?.title || undefined}
-                  currentTemplate={
-                    currentProject?.template || templateFromUrl || selectedTemplate
-                  }
-                  sandboxId={currentProject?.sandboxId || undefined}
-                  pendingEditData={pendingEditData}
-                  projectId={projectId}
-                  userId={session?.user?.id}
-                  isRetrying={isRetrying}
-                  retryCount={retryCount}
-                  isWaitingForFirstMessage={!!firstMessageRef.current && messages.length === 0}
-                  selectedModel={selectedModel}
-                  onModelChange={setSelectedModel}
-                  agentType={agentType}
-                  onAgentTypeChange={opencodeEnabled ? setAgentType : undefined}
-                  imageAttachments={imageAttachments}
-                  onImageAttachmentsChange={setImageAttachments}
-                  selectedSkills={selectedSkills}
-                  onSelectedSkillsChange={setSelectedSkills}
-                  cloudEnabled={cloudEnabled}
-                  isCloudPanelOpen={desktopSidebarPanel === 'cloud'}
-                  onCloudPanelOpen={() => setDesktopSidebarPanel('cloud')}
-                  onCloudPanelClose={() => setDesktopSidebarPanel(null)}
-                />
+              <TabsContent value="chat" className="flex-1 m-0 overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-hidden">
+                  <ChatPanel
+                    key={chatKey}
+                    status={streamStatus}
+                    messages={messages}
+                    input={input}
+                    handleInputChange={handleChatInputChange}
+                    handleSubmit={handleSubmitAuth}
+                    isLoading={isChatLoading}
+                    projectTitle={currentProject?.title || undefined}
+                    currentTemplate={
+                      currentProject?.template || templateFromUrl || selectedTemplate
+                    }
+                    sandboxId={currentProject?.sandboxId || undefined}
+                    pendingEditData={pendingEditData}
+                    projectId={projectId}
+                    userId={session?.user?.id}
+                    isRetrying={isRetrying}
+                    retryCount={retryCount}
+                    isWaitingForFirstMessage={!!firstMessageRef.current && messages.length === 0}
+                    selectedModel={selectedModel}
+                    onModelChange={setSelectedModel}
+                    agentType={agentType}
+                    onAgentTypeChange={opencodeEnabled ? setAgentType : undefined}
+                    imageAttachments={imageAttachments}
+                    onImageAttachmentsChange={setImageAttachments}
+                    selectedSkills={selectedSkills}
+                    onSelectedSkillsChange={setSelectedSkills}
+                    cloudEnabled={cloudEnabled}
+                    isCloudPanelOpen={desktopSidebarPanel === 'cloud'}
+                    onCloudPanelOpen={() => setDesktopSidebarPanel('cloud')}
+                    onCloudPanelClose={() => setDesktopSidebarPanel(null)}
+                  />
+                </div>
+                {latestError && (
+                  <ErrorNotificationCard
+                    error={latestError}
+                    onDismiss={dismissError}
+                    onSendToFix={handleSendToFixFromHook}
+                    onViewDetails={() => {
+                      setErrorModalData({ message: latestError.message, timestamp: latestError.timestamp, projectId: latestError.projectId })
+                      setIsErrorModalOpen(true)
+                    }}
+                  />
+                )}
               </TabsContent>
               <TabsContent value="panel" className="flex-1 m-0 overflow-hidden">
                 <HistoryPanel
@@ -2592,9 +2629,9 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
         <AuthDialog open={isAuthDialogOpen} setOpen={setAuthDialog} />
         <ErrorDetailsModal
           isOpen={isErrorModalOpen}
-          onClose={handleCloseErrorModal}
+          onClose={() => setIsErrorModalOpen(false)}
           errorData={errorModalData}
-          onSendToFix={handleSendToFixFromModal}
+          onSendToFix={handleSendToFixFromHook}
         />
         <ExpoGoModal
           open={showExpoGoModal}

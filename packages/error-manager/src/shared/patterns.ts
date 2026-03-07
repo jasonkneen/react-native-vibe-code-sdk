@@ -38,6 +38,12 @@ export const EXPO_ERROR_PATTERNS: RegExp[] = [
   /error: bundling failed/i,
   /error: Unable to resolve module/i,
   /BUNDLE.*failed/i,
+
+  // JSX/transform errors
+  /Expected corresponding JSX closing tag/i,
+  /Unterminated JSX contents/i,
+  /JSX element .* has no corresponding closing tag/i,
+  /Unexpected token/i,
 ]
 
 /**
@@ -76,11 +82,15 @@ export const CONVEX_SUCCESS_PATTERNS: RegExp[] = [
 
 /**
  * Sensitive patterns that should not be sent to clients
+ * NOTE: These must be specific enough to avoid filtering legitimate error messages.
+ * E.g., /TOKEN/i would match "Unexpected token" in JS syntax errors.
  */
 export const SENSITIVE_PATTERNS: RegExp[] = [
-  /ANTHROPIC_API_KEY/i,
-  /API_KEY/i,
-  /SECRET/i,
-  /PASSWORD/i,
-  /TOKEN/i,
+  /ANTHROPIC_API_KEY/,
+  /API_KEY\s*[=:]/,
+  /SECRET\s*[=:]/,
+  /PASSWORD\s*[=:]/,
+  /ACCESS_TOKEN\s*[=:]/,
+  /PRIVATE_KEY/,
+  /sk-[a-zA-Z0-9]{20,}/,
 ]
