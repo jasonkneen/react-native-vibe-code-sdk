@@ -19,8 +19,8 @@ export async function startExpoServer(
   let port = 8081
 
   console.log('[Server Utils] sandboxId', sandbox.sandboxId)
-  // Use sandbox ID as the ngrok domain (e.g., sandbox ID becomes sandboxid.ngrok.dev)
-  const ngrokDomain = customNgrokUrl || sandbox.sandboxId
+  // Use project ID as the ngrok domain for stable QR codes across sandbox recreations
+  const ngrokDomain = customNgrokUrl || projectId || sandbox.sandboxId
   const ngrokUrl = `https://${ngrokDomain}.ngrok.dev`
 
   console.log('[Server Utils] Using ngrok domain:', ngrokDomain)

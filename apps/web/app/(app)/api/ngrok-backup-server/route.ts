@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const ngrokDomain = sandboxId
+    const ngrokDomain = projectId || sandboxId
     const ngrokUrl = `https://${ngrokDomain}.ngrok.dev`
 
     switch (action) {
