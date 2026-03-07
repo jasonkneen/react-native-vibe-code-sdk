@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { connectSandbox } from '@/lib/sandbox-connect'
+import { extractExpoError, isExpoErrorPage } from '@react-native-vibe-code/error-manager/server'
 
 interface CheckNgrokHealthRequest {
   ngrokUrl: string
@@ -71,106 +72,16 @@ export async function POST(request: Request) {
       console.log('[check-ngrok-health] Response status:', response.status)
       console.log('[check-ngrok-health] Response preview:', text.substring(0, 300))
 
-      // Check for Expo error page — this means the app has a build error
-      // but the tunnel is still working (Expo serves an error page)
-      if (text.includes('_expo-static-error')) {
+      // Check for Expo error page using the error-manager package
+      if (isExpoErrorPage(text)) {
         console.log('[check-ngrok-health] ⚠️ Expo error page detected — tunnel connected but app has errors')
         tunnelStatus = 'connected'
-        // Extract error message from the Expo error JSON
-        try {
-          const errorMatch = text.match(/<script id="_expo-static-error"[^>]*>([\s\S]*?)<\/script>/)
-          if (errorMatch) {
-            const errorData = JSON.parse(errorMatch[1])
-            console.log('[check-ngrok-health] Expo error JSON structure:', JSON.stringify(errorData).substring(0, 1000))
 
-            // Build a comprehensive error message from all available data in the logs
-            const parts: string[] = []
-
-            for (const log of (errorData?.logs || [])) {
-              const msg = log?.message
-
-              // Extract the main error message
-              if (typeof msg === 'string') {
-                parts.push(msg)
-              } else if (msg && typeof msg === 'object') {
-                // Build error header: "SyntaxError: message text"
-                const name = msg.name || ''
-                const message = msg.message || ''
-                if (message) {
-                  const header = name && !message.startsWith(name) ? `${name}: ${message}` : message
-                  parts.push(header)
-                }
-
-                // Include file location if available
-                if (msg.fileName || msg.loc) {
-                  const file = msg.fileName || ''
-                  const loc = msg.loc ? `:${msg.loc.line}:${msg.loc.column}` : ''
-                  if (file) parts.push(`File: ${file}${loc}`)
-                }
-
-                // Include code frame / source context if available
-                if (msg.codeFrame) {
-                  parts.push(msg.codeFrame)
-                }
-
-                // Include stack trace if available
-                if (msg.stack && typeof msg.stack === 'string') {
-                  parts.push(msg.stack)
-                }
-              }
-
-              // Also check symbolicated stack
-              if (log?.symbolicated?.stack?.error) {
-                const stackErr = log.symbolicated.stack.error
-                if (stackErr.message && !parts.some(p => p.includes(stackErr.message))) {
-                  parts.push(stackErr.message)
-                }
-                if (stackErr.stack) {
-                  parts.push(stackErr.stack)
-                }
-              }
-            }
-
-            if (parts.length > 0) {
-              expoError = parts.join('\n\n')
-            }
-          }
-        } catch (parseErr) {
-          console.log('[check-ngrok-health] Failed to parse Expo error JSON:', parseErr)
-        }
-
-        // Fallback: try extracting from the raw HTML body (strip tags)
+        expoError = extractExpoError(text)
         if (!expoError) {
-          const stripped = text.replace(/<[^>]+>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ')
-          const rawErrorMatch = stripped.match(/(SyntaxError|TypeError|ReferenceError|RangeError)[:\s][\s\S]{10,2000}/)
-          if (rawErrorMatch) {
-            expoError = rawErrorMatch[0].trim()
-            console.log('[check-ngrok-health] Extracted error from stripped HTML')
-          }
-        }
-
-        // Last resort fallback
-        if (!expoError) {
-          console.log('[check-ngrok-health] Could not extract specific error, using fallback')
-          console.log('[check-ngrok-health] Raw page text (first 1000 chars):', text.substring(0, 1000))
           expoError = 'Expo build error detected — check the preview for details'
         }
-
         console.log('[check-ngrok-health] Extracted Expo error:', expoError.substring(0, 150))
-      }
-
-      // Also check for Expo/Metro "Server Error" pages that don't use _expo-static-error
-      // These show "Server Error" with SyntaxError/TypeError etc. in the HTML
-      if (!expoError && text.includes('Server Error')) {
-        // Strip HTML tags and decode entities to get clean text with full error + source context
-        const stripped = text.replace(/<[^>]+>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\n{3,}/g, '\n\n').trim()
-        const serverErrorMatch = stripped.match(/(SyntaxError|TypeError|ReferenceError|RangeError)[:\s][\s\S]{10,2000}/)
-        if (serverErrorMatch) {
-          console.log('[check-ngrok-health] ⚠️ Expo Server Error page detected')
-          tunnelStatus = 'connected'
-          expoError = serverErrorMatch[0].trim()
-          console.log('[check-ngrok-health] Extracted error from Server Error page:', expoError.substring(0, 150))
-        }
       }
 
       // Check for ngrok error patterns in the response
@@ -182,11 +93,9 @@ export async function POST(request: Request) {
         console.log('[check-ngrok-health] ❌ Detected ngrok error pattern in response')
         tunnelStatus = 'disconnected'
       } else if (response.ok || response.status === 404) {
-        // 200 OK or 404 (Expo might return 404 for some routes) means tunnel is working
         console.log('[check-ngrok-health] ✅ Ngrok tunnel is connected')
         tunnelStatus = 'connected'
       } else if (response.status >= 500 && !expoError) {
-        // 5xx errors typically indicate tunnel issues, unless we already detected an Expo error page
         console.log('[check-ngrok-health] ❌ Server error, tunnel may be down')
         tunnelStatus = 'disconnected'
       } else {
@@ -208,7 +117,6 @@ export async function POST(request: Request) {
         console.log('[check-ngrok-health] Checking if server is still running in sandbox...')
         const sandbox = await connectSandbox(sandboxId)
 
-        // Check if the port is listening
         const checkPortCmd = `ss -tuln 2>/dev/null | grep -q :${checkPort} && echo "LISTENING" || echo "NOT_LISTENING"`
         const result = await sandbox.commands.run(checkPortCmd, { timeoutMs: 3000 })
 
@@ -221,7 +129,6 @@ export async function POST(request: Request) {
         serverStatus = undefined
       }
     } else {
-      // Tunnel is connected, so server must be running
       serverStatus = 'running'
     }
 
