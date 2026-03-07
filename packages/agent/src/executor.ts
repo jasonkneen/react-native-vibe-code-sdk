@@ -134,6 +134,10 @@ export async function runExecutor(
       console.log('WARNING: No system prompt provided — agent will use default behavior')
     }
 
+    if (args.sessionId) {
+      console.log('Resuming session:', args.sessionId)
+    }
+
     for await (const message of query({
       prompt: finalPrompt,
       options: {
@@ -147,6 +151,8 @@ export async function runExecutor(
         ...(args.model && { model: args.model }),
         // Add hooks if configured
         ...(Object.keys(hooksConfig).length > 0 && { hooks: hooksConfig }),
+        // Resume previous session for conversation continuity and prompt caching
+        ...(args.sessionId && { resume: args.sessionId }),
       } as any,
     })) {
       messages.push(message)

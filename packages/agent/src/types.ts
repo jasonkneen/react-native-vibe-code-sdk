@@ -14,6 +14,8 @@ export interface ExecutorArgs {
   model?: string
   /** Array of image URLs to attach to the prompt */
   imageUrls?: string[]
+  /** Session ID to resume a previous conversation */
+  sessionId?: string
 }
 
 /**
