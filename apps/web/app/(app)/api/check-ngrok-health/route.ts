@@ -81,6 +81,7 @@ export async function POST(request: Request) {
           const errorMatch = text.match(/<script id="_expo-static-error"[^>]*>([\s\S]*?)<\/script>/)
           if (errorMatch) {
             const errorData = JSON.parse(errorMatch[1])
+            console.log('[check-ngrok-health] Expo error JSON structure:', JSON.stringify(errorData).substring(0, 500))
             const firstLog = errorData?.logs?.[0]
 
             // Strategy 1: Static error with message object (e.g. { message: { message: "...", name: "SyntaxError" } })
@@ -114,15 +115,35 @@ export async function POST(request: Request) {
                 }
               }
             }
+
+            // Strategy 4: Deep search — recursively find any string that looks like an error
+            if (!expoError) {
+              const jsonStr = JSON.stringify(errorData)
+              const deepMatch = jsonStr.match(/(SyntaxError|TypeError|ReferenceError|RangeError|Error)[:\s]+([^"]{10,200})/)
+              if (deepMatch) {
+                expoError = deepMatch[0].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+              }
+            }
           }
         } catch (parseErr) {
           console.log('[check-ngrok-health] Failed to parse Expo error JSON:', parseErr)
         }
 
-        // Fallback: if we detected the error page but couldn't extract the message,
-        // still report a generic error so the user knows something is wrong
+        // Fallback: try extracting error text from the raw HTML body
+        if (!expoError) {
+          // Strip HTML tags and look for error-like text
+          const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+          const rawErrorMatch = stripped.match(/(SyntaxError|TypeError|ReferenceError|RangeError|Error)[\s:]+(.{10,300})/)
+          if (rawErrorMatch) {
+            expoError = rawErrorMatch[0].trim().substring(0, 500)
+            console.log('[check-ngrok-health] Extracted error from stripped HTML:', expoError.substring(0, 150))
+          }
+        }
+
+        // Last resort fallback
         if (!expoError) {
           console.log('[check-ngrok-health] Could not extract specific error, using fallback')
+          console.log('[check-ngrok-health] Raw page text (first 1000 chars):', text.substring(0, 1000))
           expoError = 'Expo build error detected — check the preview for details'
         }
 
@@ -132,11 +153,13 @@ export async function POST(request: Request) {
       // Also check for Expo/Metro "Server Error" pages that don't use _expo-static-error
       // These show "Server Error" with SyntaxError/TypeError etc. in the HTML
       if (!expoError && text.includes('Server Error')) {
-        const serverErrorMatch = text.match(/(SyntaxError|TypeError|ReferenceError|RangeError):\s*([^\n<]+)/)
+        // Strip HTML tags first to get clean text, then search for error patterns
+        const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+        const serverErrorMatch = stripped.match(/(SyntaxError|TypeError|ReferenceError|RangeError):\s*(.{10,300})/)
         if (serverErrorMatch) {
           console.log('[check-ngrok-health] ⚠️ Expo Server Error page detected')
           tunnelStatus = 'connected'
-          expoError = serverErrorMatch[0].trim()
+          expoError = serverErrorMatch[0].trim().substring(0, 500)
           console.log('[check-ngrok-health] Extracted error from Server Error page:', expoError.substring(0, 150))
         }
       }

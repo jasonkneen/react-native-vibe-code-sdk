@@ -543,6 +543,7 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
     isNgrokHealthy,
     isBackupActive,
     isStartingBackup,
+    checkNgrokHealth,
   } = useNgrokHealthCheck({
     sandboxId: currentProject?.sandboxId || null,
     projectId: projectId || null,
@@ -568,6 +569,22 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
       setPreviewKey(prev => prev + 1)
     },
   })
+
+  // Check for Expo errors when the agent finishes working
+  // Errors can appear while the agent is writing code (Metro rebundles on file change)
+  const prevStreamStatusRef = useRef(streamStatus)
+  useEffect(() => {
+    const prev = prevStreamStatusRef.current
+    prevStreamStatusRef.current = streamStatus
+
+    // Trigger error check when stream transitions from active to ready
+    if (streamStatus === 'ready' && (prev === 'streaming' || prev === 'submitted')) {
+      console.log('[Project] Agent finished, checking for Expo errors...')
+      // Small delay to let Metro finish rebundling after the last file write
+      setTimeout(() => checkNgrokHealth(), 3000)
+    }
+  }, [streamStatus, checkNgrokHealth])
+
   const hasRun = useRef(false)
   const hasSubmittedFirstMessage = useRef(false)
   const hasSubmittedFirstMessageToAPI = useRef(false) // Track if we've actually sent the first message to the API
