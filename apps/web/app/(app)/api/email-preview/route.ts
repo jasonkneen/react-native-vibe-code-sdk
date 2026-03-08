@@ -3,15 +3,17 @@ import { render } from '@react-email/components'
 import { WelcomeEmail, NewsletterEmail } from '@/lib/email'
 import { getTemplate, newsletterTemplates } from '@/lib/email/templates/registry'
 
+const PREVIEW_UNSUBSCRIBE_URL = '#unsubscribe-preview'
+
 const templates: Record<string, (params: URLSearchParams) => React.ReactElement> = {
   welcome: (params) =>
-    WelcomeEmail({ name: params.get('name') || 'Jane Doe' }),
-  newsletter: () => NewsletterEmail({}),
+    WelcomeEmail({ name: params.get('name') || 'Jane Doe', unsubscribeUrl: PREVIEW_UNSUBSCRIBE_URL }),
+  newsletter: () => NewsletterEmail({ unsubscribeUrl: PREVIEW_UNSUBSCRIBE_URL }),
 }
 
 // Register all newsletter templates from the registry
 for (const t of newsletterTemplates) {
-  templates[t.name] = () => t.component({})
+  templates[t.name] = () => t.component({ unsubscribeUrl: PREVIEW_UNSUBSCRIBE_URL })
 }
 
 export async function GET(request: NextRequest) {
