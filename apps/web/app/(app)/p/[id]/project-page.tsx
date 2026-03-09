@@ -2472,6 +2472,7 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
                   isCloudPanelOpen={mobileSidebarPanel === 'cloud'}
                   onCloudPanelOpen={() => setMobileSidebarPanel('cloud')}
                   onCloudPanelClose={() => setMobileSidebarPanel(null)}
+                  onIframeRefresh={() => setPreviewKey(prev => prev + 1)}
                 />
                 {latestError && (
                   <ErrorNotificationCard
@@ -2582,6 +2583,7 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
                   isCloudPanelOpen={desktopSidebarPanel === 'cloud'}
                   onCloudPanelOpen={() => setDesktopSidebarPanel('cloud')}
                   onCloudPanelClose={() => setDesktopSidebarPanel(null)}
+                  onIframeRefresh={() => setPreviewKey(prev => prev + 1)}
                 />
                 {latestError && (
                   <ErrorNotificationCard

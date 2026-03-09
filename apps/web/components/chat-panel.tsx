@@ -6,6 +6,7 @@ import { Messages } from '@/components/chat/messages'
 import type { Message } from 'ai'
 import type React from 'react'
 import { usePusherHoverSelection } from '@/hooks/usePusherHoverSelection'
+import { useRemoteControlStatus } from '@/hooks/useRemoteControlStatus'
 
 interface ChatPanelProps {
   messages: Message[]
@@ -37,6 +38,7 @@ interface ChatPanelProps {
   isCloudPanelOpen?: boolean
   onCloudPanelOpen?: () => void
   onCloudPanelClose?: () => void
+  onIframeRefresh?: () => void
 }
 
 export function ChatPanel({
@@ -62,9 +64,16 @@ export function ChatPanel({
   isCloudPanelOpen = false,
   onCloudPanelOpen,
   onCloudPanelClose,
+  onIframeRefresh,
 }: ChatPanelProps) {
+  const { isRemoteControlActive } = useRemoteControlStatus({
+    sandboxId: sandboxId ?? null,
+    onComplete: onIframeRefresh,
+  })
+
   return (
     <BaseChatPanel
+      isRemoteControlActive={isRemoteControlActive}
       messages={messages}
       input={input}
       handleInputChange={handleInputChange}

@@ -12,6 +12,8 @@ export { SelectionIndicator, getFileEditionRef } from './SelectionIndicator'
 export type { SelectionIndicatorExtendedProps } from './SelectionIndicator'
 
 export { usePusherHoverSelection } from './usePusherHoverSelection'
+export { useRemoteControlStatus } from './useRemoteControlStatus'
+export type { UseRemoteControlStatusOptions, UseRemoteControlStatusResult } from './useRemoteControlStatus'
 
 // Re-export types for convenience
 export type {

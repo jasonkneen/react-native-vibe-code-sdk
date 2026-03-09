@@ -5,6 +5,7 @@ import { canUserSendMessage, incrementMessageUsage } from '@/lib/message-usage'
 import { corsHeaders, handleCorsOptions } from '@/lib/cors'
 import { dispatchToAgent } from '@/lib/agent-dispatcher'
 import type { AgentType } from '@/lib/agent-dispatcher'
+import { getPusherServer } from '@react-native-vibe-code/pusher/server'
 
 type ClaudeCodeResponse = {
   type: 'message' | 'completion' | 'error'
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
     imageAttachments,
     skills,
     agentType,
+    source,
   }: {
     messages: UIMessage[]
     projectId: string
@@ -40,18 +42,23 @@ export async function POST(req: Request) {
     imageAttachments?: Array<{ url: string; contentType: string; name: string; size: number }>
     skills?: string[]
     agentType?: AgentType
+    source?: string
   } = await req.json()
+
+  const isRemoteControl = source === 'remote-control'
 
   // If userId not provided (mobile app), look it up from the project
   let userId = bodyUserId
-  if (!userId && projectId) {
+  let remoteSandboxId: string | null = null
+  if ((!userId || isRemoteControl) && projectId) {
     const project = await db
-      .select({ userId: projects.userId })
+      .select({ userId: projects.userId, sandboxId: projects.sandboxId })
       .from(projects)
       .where(eq(projects.id, projectId))
       .limit(1)
     if (project.length > 0) {
-      userId = project[0].userId
+      if (!userId) userId = project[0].userId
+      remoteSandboxId = project[0].sandboxId ?? null
     }
   }
 
@@ -368,6 +375,20 @@ export async function POST(req: Request) {
                     }
                   }, 10000) // Check every 10 seconds
 
+                  // Notify desktop that remote control is editing
+                  if (isRemoteControl && remoteSandboxId) {
+                    try {
+                      const pusher = getPusherServer()
+                      await pusher.trigger(
+                        `sandbox-${remoteSandboxId}`,
+                        'remote-control-start',
+                        {}
+                      )
+                    } catch (e) {
+                      console.error('[Chat Route] Failed to trigger remote-control-start:', e)
+                    }
+                  }
+
                   try {
                     // Call the handler module directly - no HTTP, no timeout issues!
                     await dispatchToAgent(
@@ -416,6 +437,20 @@ export async function POST(req: Request) {
                           // Save to DB BEFORE closing the stream
                           await saveMessagesToDatabase(fullContent, 'onComplete')
 
+                          // Notify desktop that remote control is done
+                          if (isRemoteControl && remoteSandboxId) {
+                            try {
+                              const pusher = getPusherServer()
+                              await pusher.trigger(
+                                `sandbox-${remoteSandboxId}`,
+                                'remote-control-complete',
+                                {}
+                              )
+                            } catch (e) {
+                              console.error('[Chat Route] Failed to trigger remote-control-complete:', e)
+                            }
+                          }
+
                           // Use safe helpers for final message and close
                           safeEnqueue({
                             type: 'text-delta',
@@ -434,6 +469,20 @@ export async function POST(req: Request) {
 
                           // Save to DB BEFORE closing the stream
                           await saveMessagesToDatabase(fullContent, 'onError')
+
+                          // Notify desktop that remote control is done (even on error)
+                          if (isRemoteControl && remoteSandboxId) {
+                            try {
+                              const pusher = getPusherServer()
+                              await pusher.trigger(
+                                `sandbox-${remoteSandboxId}`,
+                                'remote-control-complete',
+                                {}
+                              )
+                            } catch (e) {
+                              console.error('[Chat Route] Failed to trigger remote-control-complete on error:', e)
+                            }
+                          }
 
                           safeCloseStream('error', errorContent)
                         },

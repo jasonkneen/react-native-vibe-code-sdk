@@ -182,6 +182,7 @@ export function ChatScreen({ onNavigateHome, onClose, selectedProject }: ChatScr
       const newBody = {
         projectId: requestData?.body?.projectId || selectedProject?.id || projectId,
         messages: lastUserMessage ? [lastUserMessage] : [],
+        source: 'remote-control',
       }
 
       console.log('[ChatScreen] Final request body:', newBody)
