@@ -365,14 +365,12 @@ export function ChatScreen({ projectId, onClose }: ChatScreenProps) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Chat
-          </Text>
-        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Remote Control
+        </Text>
         <TouchableOpacity
           onPress={onClose}
-          style={styles.headerButton}
+          style={styles.headerCloseButton}
           activeOpacity={0.7}
         >
           <X size={22} color="black" />
@@ -469,25 +467,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
     backgroundColor: '#fff',
+    position: 'relative',
   },
-  headerButton: {
+  headerCloseButton: {
+    position: 'absolute',
+    right: 16,
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 22,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    marginHorizontal: 12,
   },
   headerTitle: {
     fontSize: 17,
