@@ -45,7 +45,8 @@ export async function POST(req: Request) {
     source?: string
   } = await req.json()
 
-  const isRemoteControl = source === 'remote-control'
+  // Mobile (remote-control) requests never include userId — they only send projectId + messages
+  const isRemoteControl = !bodyUserId
 
   // If userId not provided (mobile app), look it up from the project
   let userId = bodyUserId
