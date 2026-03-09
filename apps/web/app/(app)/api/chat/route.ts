@@ -1,4 +1,5 @@
 import { saveProjectMessages } from '@/lib/db'
+import { db, projects, eq } from '@react-native-vibe-code/database'
 import { streamText, UIMessage } from 'ai'
 import { canUserSendMessage, incrementMessageUsage } from '@/lib/message-usage'
 import { corsHeaders, handleCorsOptions } from '@/lib/cors'
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   const {
     messages,
     projectId,
-    userId,
+    userId: bodyUserId,
     claudeModel,
     fileEdition,
     selectionData,
@@ -40,6 +41,19 @@ export async function POST(req: Request) {
     skills?: string[]
     agentType?: AgentType
   } = await req.json()
+
+  // If userId not provided (mobile app), look it up from the project
+  let userId = bodyUserId
+  if (!userId && projectId) {
+    const project = await db
+      .select({ userId: projects.userId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1)
+    if (project.length > 0) {
+      userId = project[0].userId
+    }
+  }
 
   // Get the last user message to send to claude-code
   const lastUserMessageObj = messages.filter((m: UIMessage) => m.role === 'user').pop()
