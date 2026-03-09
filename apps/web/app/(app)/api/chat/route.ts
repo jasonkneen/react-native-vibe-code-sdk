@@ -82,6 +82,9 @@ export async function POST(req: Request) {
     finalImageAttachmentsCount: finalImageAttachments?.length || 0,
     skillsCount: skills?.length || 0,
     skills: skills,
+    source,
+    isRemoteControl,
+    remoteSandboxId,
   })
 
   console.log('[Chat Route] All messages:', messages.map(m => ({
@@ -376,14 +379,17 @@ export async function POST(req: Request) {
                   }, 10000) // Check every 10 seconds
 
                   // Notify desktop that remote control is editing
+                  console.log('[Chat Route] Remote control check:', { isRemoteControl, remoteSandboxId })
                   if (isRemoteControl && remoteSandboxId) {
                     try {
+                      console.log('[Chat Route] Triggering remote-control-start on channel:', `sandbox-${remoteSandboxId}`)
                       const pusher = getPusherServer()
                       await pusher.trigger(
                         `sandbox-${remoteSandboxId}`,
                         'remote-control-start',
                         {}
                       )
+                      console.log('[Chat Route] remote-control-start triggered successfully')
                     } catch (e) {
                       console.error('[Chat Route] Failed to trigger remote-control-start:', e)
                     }
