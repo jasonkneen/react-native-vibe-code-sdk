@@ -8,6 +8,6 @@ const ProjectPage = dynamic(
   { ssr: false, loading: () => <Loading /> },
 )
 
-export function ProjectPageWrapper({ opencodeEnabled }: { opencodeEnabled: boolean }) {
-  return <ProjectPage opencodeEnabled={opencodeEnabled} />
+export function ProjectPageWrapper({ opencodeEnabled, template }: { opencodeEnabled: boolean; template: 'expo-testing' | 'react-native-expo' }) {
+  return <ProjectPage opencodeEnabled={opencodeEnabled} template={template} />
 }

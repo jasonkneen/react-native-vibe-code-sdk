@@ -16,3 +16,11 @@ export const tunnelMode = flag<string>({
     ? { adapter: vercelAdapter() }
     : { decide: () => 'ngrok-patch' }),
 })
+
+export const templateFlag = flag<string>({
+  key: 'template',
+  defaultValue: 'react-native-expo',
+  ...(process.env.FLAGS
+    ? { adapter: vercelAdapter() }
+    : { decide: () => 'react-native-expo' }),
+})

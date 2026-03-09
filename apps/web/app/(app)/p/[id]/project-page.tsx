@@ -50,9 +50,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { AppSidebar } from '@/components/app-sidebar'
 import Loading from './loading'
 
-export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabled?: boolean }) {
-  // Toggle to true to force expo-testing template during development
-  const EXPO_TESTING = false
+export function ProjectPageInternal({ opencodeEnabled = false, template: templateOverride }: { opencodeEnabled?: boolean; template?: 'expo-testing' | 'react-native-expo' }) {
 
   const params = useParams()
   const projectID = params?.id as string
@@ -80,7 +78,7 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
     })
   }, [])
   const [selectedTemplate, setSelectedTemplate] = useState<'auto' | TemplateId>(
-    EXPO_TESTING ? 'expo-testing' : 'react-native-expo',
+    templateOverride || 'react-native-expo',
   )
   const [languageModel, setLanguageModel] = useCookieStorage<LLMModelConfig>(
     'languageModel',
@@ -1824,7 +1822,7 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
     console.log('Creating new project with:', {
       id: projectId,
       title: 'Generating project name...',
-      template: EXPO_TESTING ? 'expo-testing' : (templateFromUrl || selectedTemplate || 'react-native-expo'),
+      template: templateOverride || templateFromUrl || selectedTemplate || 'react-native-expo',
       userID: session?.user?.id,
     })
 
@@ -1837,7 +1835,7 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
         body: JSON.stringify({
           id: projectId,
           title: 'Generating project name...',
-          template: EXPO_TESTING ? 'expo-testing' : (templateFromUrl || selectedTemplate || 'react-native-expo'),
+          template: templateOverride || templateFromUrl || selectedTemplate || 'react-native-expo',
           userID: session?.user?.id,
         }),
       })
@@ -1969,7 +1967,7 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
           projectId: project.id,
           userID: session?.user?.id,
           teamID: userTeam?.id,
-          chooseTemplate: EXPO_TESTING ? 'expo-testing' : 'expo',
+          chooseTemplate: templateOverride || 'expo',
           firstMessage: firstMessage ? { role: 'user', content: firstMessage } : undefined, // Pass first message for title generation
         }),
       })
@@ -2055,7 +2053,7 @@ export function ProjectPageInternal({ opencodeEnabled = false }: { opencodeEnabl
           sbxId: result.sandboxId,
           projectId: result.projectId,
           projectTitle: result.projectTitle,
-          template: EXPO_TESTING ? 'expo-testing' : (project.template || 'react-native-expo'),
+          template: templateOverride || project.template || 'react-native-expo',
           recreated: result.recreated,
         })
 
