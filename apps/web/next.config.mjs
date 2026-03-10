@@ -7,6 +7,7 @@ const monorepoRoot = resolve(__dirname, '../..');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium-min'],
   reactCompiler: true,
   typescript: {
     ignoreBuildErrors: true,
