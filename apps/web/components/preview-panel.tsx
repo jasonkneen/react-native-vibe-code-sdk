@@ -109,6 +109,7 @@ export function PreviewPanel({
   )
   const [hasTriggeredScreenshots, setHasTriggeredScreenshots] = useState(false)
   const screenshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const screenshotRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { Canvas } = useQRCode()
 
   // Track if user has seen Expo Go modal
@@ -393,36 +394,59 @@ export function PreviewPanel({
       const projectId = currentProject.id
       const currentUserId = userId
 
-      screenshotTimeoutRef.current = setTimeout(async () => {
+      const triggerScreenshots = async () => {
         console.log('[PreviewPanel] Triggering automatic screenshot capture for project:', projectId)
 
         try {
           const response = await fetch(`/api/projects/${projectId}/screenshots`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userID: currentUserId,
-            }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userID: currentUserId }),
           })
 
           if (response.ok) {
             const data = await response.json()
             console.log('[PreviewPanel] Screenshots captured successfully:', data.screenshots)
-
-            // Update current project with new screenshot URLs
             if (data.project && onProjectUpdate) {
               onProjectUpdate(data.project)
             }
+            return true
           } else {
             const error = await response.json()
             console.error('[PreviewPanel] Failed to capture screenshots:', error)
+            return false
           }
         } catch (error) {
           console.error('[PreviewPanel] Error triggering screenshots:', error)
-        } finally {
-          screenshotTimeoutRef.current = null
+          return false
+        }
+      }
+
+      screenshotTimeoutRef.current = setTimeout(async () => {
+        const success = await triggerScreenshots()
+        screenshotTimeoutRef.current = null
+
+        if (!success) {
+          // Schedule a retry in 120 seconds: first check DB, only retry if still missing
+          console.log('[PreviewPanel] Screenshot failed, scheduling retry in 120 seconds...')
+          screenshotRetryRef.current = setTimeout(async () => {
+            screenshotRetryRef.current = null
+            try {
+              const check = await fetch(`/api/projects/${projectId}/public`)
+              if (check.ok) {
+                const data = await check.json()
+                if (data.screenshotMobile && data.screenshotDesktop) {
+                  console.log('[PreviewPanel] Screenshots already saved, skipping retry')
+                  if (onProjectUpdate) onProjectUpdate(data)
+                  return
+                }
+              }
+            } catch {
+              // If check fails, attempt the retry anyway
+            }
+            console.log('[PreviewPanel] Screenshots still missing, retrying...')
+            await triggerScreenshots()
+          }, 120000)
         }
       }, 60000) // 60 seconds - wait for app to fully initialize
     }
@@ -434,6 +458,10 @@ export function PreviewPanel({
       if (screenshotTimeoutRef.current) {
         clearTimeout(screenshotTimeoutRef.current)
         screenshotTimeoutRef.current = null
+      }
+      if (screenshotRetryRef.current) {
+        clearTimeout(screenshotRetryRef.current)
+        screenshotRetryRef.current = null
       }
     }
   }, [])
