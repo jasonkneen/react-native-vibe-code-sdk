@@ -6,6 +6,8 @@ import puppeteer from 'puppeteer-core'
 import chromium from '@sparticuz/chromium-min'
 import { put } from '@vercel/blob'
 
+export const maxDuration = 300 // 5 minutes for screenshot capture
+
 // Hosted chromium binary URL for serverless environments
 const CHROMIUM_REMOTE_URL =
   'https://github.com/Sparticuz/chromium/releases/download/v141.0.0/chromium-v141.0.0-pack.tar'
