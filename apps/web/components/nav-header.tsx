@@ -964,11 +964,11 @@ export function NavHeader({
           )}
 
           {/* Docs Button */}
-          <Button variant="ghost" size="sm" asChild>
+          {/* <Button variant="ghost" size="sm" asChild>
             <Link href="https://docs.reactnativevibecode.com" className="flex items-center gap-2">
               <span className="text-sm">Docs</span>
             </Link>
-          </Button>
+          </Button> */}
 
           {/* GitHub Button */}
           <Button
