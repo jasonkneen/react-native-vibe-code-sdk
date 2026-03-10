@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface NewsletterSend {
   id: string
@@ -13,6 +13,18 @@ interface NewsletterSend {
 interface UploadedImage {
   url: string
   name: string
+}
+
+interface SendStatus {
+  templateName: string
+  totalSubscribed: number
+  sentCount: number
+  pendingCount: number
+  sent: { email: string; sentAt: string }[]
+  pending: { email: string; name: string }[]
+  quotaRemaining: number
+  sentInLast24h: number
+  nextAvailable: string | null
 }
 
 const NEWSLETTER_TEMPLATES = [
@@ -29,10 +41,27 @@ export function EmailAdminPanel() {
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
   const [testEmail, setTestEmail] = useState('rodrigofigueroa.name@gmail.com')
   const [sendingTest, setSendingTest] = useState(false)
+  const [status, setStatus] = useState<SendStatus | null>(null)
 
   useEffect(() => {
     fetchHistory()
   }, [])
+
+  const fetchStatus = useCallback(async (template: string) => {
+    const res = await fetch(`/api/email-admin/status?template=${template}`)
+    if (res.ok) {
+      const data = await res.json()
+      setStatus(data)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedTemplate) {
+      fetchStatus(selectedTemplate)
+    } else {
+      setStatus(null)
+    }
+  }, [selectedTemplate, fetchStatus])
 
   async function fetchHistory() {
     const res = await fetch('/api/email-admin/history')
@@ -44,7 +73,11 @@ export function EmailAdminPanel() {
 
   async function handleSend() {
     if (!selectedTemplate) return
-    if (!confirm(`Send "${selectedTemplate}" to all subscribed users? This cannot be undone.`)) return
+    const pendingCount = status?.pendingCount || 0
+    const quota = status?.quotaRemaining || 0
+    const willSend = Math.min(pendingCount, quota)
+
+    if (!confirm(`Send "${selectedTemplate}" to ${willSend} users (of ${pendingCount} pending)? Daily quota: ${quota} remaining.`)) return
 
     setSending(true)
     setMessage(null)
@@ -58,9 +91,12 @@ export function EmailAdminPanel() {
       const data = await res.json()
 
       if (res.ok) {
-        setMessage({ type: 'success', text: `Newsletter sent to ${data.recipientCount} recipients!` })
+        setMessage({
+          type: 'success',
+          text: `Sent to ${data.sentCount} users. ${data.remainingUsers} still pending. Quota remaining: ${data.quotaRemaining}`,
+        })
         fetchHistory()
-        setSelectedTemplate('')
+        fetchStatus(selectedTemplate)
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to send' })
       }
@@ -131,6 +167,8 @@ export function EmailAdminPanel() {
     setTimeout(() => setCopiedUrl(null), 2000)
   }
 
+  const canSend = status && status.pendingCount > 0 && status.quotaRemaining > 0
+
   return (
     <div className="space-y-10">
       <div>
@@ -192,6 +230,88 @@ export function EmailAdminPanel() {
           </div>
         </div>
 
+        {/* Send Status */}
+        {status && selectedTemplate && (
+          <div className="space-y-4">
+            {/* Progress bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">
+                  Progress: {status.sentCount} / {status.totalSubscribed} sent
+                </span>
+                <span className="text-muted-foreground">
+                  {status.pendingCount} pending
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2.5">
+                <div
+                  className="bg-primary h-2.5 rounded-full transition-all"
+                  style={{
+                    width: `${status.totalSubscribed > 0 ? (status.sentCount / status.totalSubscribed) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Quota info */}
+            <div className="flex gap-4 text-sm">
+              <div className="px-3 py-1.5 bg-muted/50 rounded-md">
+                Daily quota: <span className="font-medium">{status.quotaRemaining}</span> / 100 remaining
+              </div>
+              <div className="px-3 py-1.5 bg-muted/50 rounded-md">
+                Sent last 24h: <span className="font-medium">{status.sentInLast24h}</span>
+              </div>
+              {status.nextAvailable && (
+                <div className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md">
+                  Next batch available: {new Date(status.nextAvailable).toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            {/* Sent / Pending lists */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Sent */}
+              <div className="border rounded-lg p-4 space-y-2">
+                <h3 className="text-sm font-medium text-green-700">
+                  Sent ({status.sent.length})
+                </h3>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {status.sent.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No emails sent yet</p>
+                  ) : (
+                    status.sent.map((r) => (
+                      <div key={r.email} className="text-xs flex justify-between">
+                        <span className="truncate">{r.email}</span>
+                        <span className="text-muted-foreground shrink-0 ml-2">
+                          {new Date(r.sentAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Pending */}
+              <div className="border rounded-lg p-4 space-y-2">
+                <h3 className="text-sm font-medium text-amber-700">
+                  Pending ({status.pending.length})
+                </h3>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {status.pending.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">All users have received this newsletter</p>
+                  ) : (
+                    status.pending.map((u) => (
+                      <div key={u.email} className="text-xs truncate">
+                        {u.email}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {selectedTemplate && (
           <div className="space-y-3">
             <label className="text-sm font-medium">Preview</label>
@@ -227,10 +347,16 @@ export function EmailAdminPanel() {
 
         <button
           onClick={handleSend}
-          disabled={!selectedTemplate || sending}
+          disabled={!selectedTemplate || sending || !canSend}
           className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
         >
-          {sending ? 'Sending...' : 'Send to All Subscribers'}
+          {sending
+            ? 'Sending...'
+            : status && status.quotaRemaining === 0
+              ? 'Daily Quota Reached'
+              : status && status.pendingCount === 0
+                ? 'All Users Sent'
+                : `Send Batch (up to ${Math.min(status?.pendingCount || 0, status?.quotaRemaining || 100)} users)`}
         </button>
       </section>
 
