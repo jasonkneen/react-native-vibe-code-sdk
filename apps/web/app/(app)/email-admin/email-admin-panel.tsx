@@ -22,9 +22,6 @@ interface SendStatus {
   pendingCount: number
   sent: { email: string; sentAt: string }[]
   pending: { email: string; name: string }[]
-  quotaRemaining: number
-  sentInLast24h: number
-  nextAvailable: string | null
 }
 
 const NEWSLETTER_TEMPLATES = [
@@ -75,10 +72,8 @@ export function EmailAdminPanel() {
   async function handleSend() {
     if (!selectedTemplate) return
     const pendingCount = status?.pendingCount || 0
-    const quota = status?.quotaRemaining || 0
-    const willSend = Math.min(pendingCount, quota)
 
-    if (!confirm(`Send "${selectedTemplate}" to ${willSend} users (of ${pendingCount} pending)? Daily quota: ${quota} remaining.`)) return
+    if (!confirm(`Send "${selectedTemplate}" to ${pendingCount} pending users? This cannot be undone.`)) return
 
     setSending(true)
     setMessage(null)
@@ -94,7 +89,7 @@ export function EmailAdminPanel() {
       if (res.ok) {
         setMessage({
           type: 'success',
-          text: `Sent to ${data.sentCount} users. ${data.remainingUsers} still pending. Quota remaining: ${data.quotaRemaining}`,
+          text: `Newsletter sent to ${data.sentCount} users!`,
         })
         fetchHistory()
         fetchStatus(selectedTemplate)
@@ -168,7 +163,7 @@ export function EmailAdminPanel() {
     setTimeout(() => setCopiedUrl(null), 2000)
   }
 
-  const canSend = status && status.pendingCount > 0 && status.quotaRemaining > 0
+  const canSend = status && status.pendingCount > 0
 
   return (
     <div className="space-y-10">
@@ -252,21 +247,6 @@ export function EmailAdminPanel() {
                   }}
                 />
               </div>
-            </div>
-
-            {/* Quota info */}
-            <div className="flex gap-4 text-sm">
-              <div className="px-3 py-1.5 bg-muted/50 rounded-md">
-                Daily quota: <span className="font-medium">{status.quotaRemaining}</span> / 100 remaining
-              </div>
-              <div className="px-3 py-1.5 bg-muted/50 rounded-md">
-                Sent last 24h: <span className="font-medium">{status.sentInLast24h}</span>
-              </div>
-              {status.nextAvailable && (
-                <div className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md">
-                  Next batch available: {new Date(status.nextAvailable).toLocaleString()}
-                </div>
-              )}
             </div>
 
             {/* Sent / Pending lists */}
@@ -353,11 +333,9 @@ export function EmailAdminPanel() {
         >
           {sending
             ? 'Sending...'
-            : status && status.quotaRemaining === 0
-              ? 'Daily Quota Reached'
-              : status && status.pendingCount === 0
-                ? 'All Users Sent'
-                : `Send Batch (up to ${Math.min(status?.pendingCount || 0, status?.quotaRemaining || 100)} users)`}
+            : status && status.pendingCount === 0
+              ? 'All Users Sent'
+              : `Send to All Subscribers (${status?.pendingCount || 0} pending)`}
         </button>
       </section>
 

@@ -5,8 +5,6 @@ import { getResend, NEWSLETTER_FROM } from '@/lib/email'
 import { getTemplate } from '@/lib/email/templates/registry'
 import { getUnsubscribeUrl } from '@/lib/email/unsubscribe'
 
-const DAILY_LIMIT = 100
-
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
   const adminEmail = process.env.ADMIN_EMAIL
@@ -28,36 +26,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Check how many emails were sent in the last 24 hours (across all newsletters)
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const recentSends = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(newsletterRecipients)
-      .where(sql`${newsletterRecipients.sentAt} > ${twentyFourHoursAgo}`)
-
-    const sentInLast24h = Number(recentSends[0]?.count || 0)
-    const remainingQuota = Math.max(0, DAILY_LIMIT - sentInLast24h)
-
-    if (remainingQuota === 0) {
-      // Find when the oldest send in the last 24h window was, so we know when quota resets
-      const oldestRecent = await db
-        .select({ sentAt: newsletterRecipients.sentAt })
-        .from(newsletterRecipients)
-        .where(sql`${newsletterRecipients.sentAt} > ${twentyFourHoursAgo}`)
-        .orderBy(newsletterRecipients.sentAt)
-        .limit(1)
-
-      const nextAvailable = oldestRecent[0]
-        ? new Date(oldestRecent[0].sentAt!.getTime() + 24 * 60 * 60 * 1000).toISOString()
-        : null
-
-      return NextResponse.json({
-        error: `Daily limit of ${DAILY_LIMIT} emails reached. Try again after the 24h window resets.`,
-        nextAvailable,
-        sentInLast24h,
-      }, { status: 429 })
-    }
-
     // Get users who already received this specific newsletter
     const alreadySent = await db
       .select({ userId: newsletterRecipients.userId })
@@ -67,7 +35,7 @@ export async function POST(request: NextRequest) {
     const alreadySentUserIds = alreadySent.map((r) => r.userId)
 
     // Get subscribed users who haven't received this newsletter yet
-    let query = db
+    const subscribedUsers = await db
       .select({ id: user.id, email: user.email })
       .from(user)
       .leftJoin(emailPreferences, eq(user.id, emailPreferences.userId))
@@ -75,9 +43,6 @@ export async function POST(request: NextRequest) {
         sql`(${emailPreferences.subscribedToNewsletter} IS NULL OR ${emailPreferences.subscribedToNewsletter} = true)`
       )
 
-    const subscribedUsers = await query
-
-    // Filter out already-sent users in JS (simpler than complex SQL with optional NOT IN)
     const pendingUsers = alreadySentUserIds.length > 0
       ? subscribedUsers.filter((u) => !alreadySentUserIds.includes(u.id))
       : subscribedUsers
@@ -90,53 +55,60 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Only send up to remaining quota
-    const batch = pendingUsers.slice(0, remainingQuota)
     const Component = template.component
     const resend = getResend()
 
-    // Send batch via Resend (max 100 per API call)
-    const emails = batch.map((u) => ({
-      from: NEWSLETTER_FROM,
-      to: u.email,
-      subject: template.subject,
-      react: Component({
-        issueNumber: template.issueNumber,
-        issueDate: template.issueDate,
-        unsubscribeUrl: getUnsubscribeUrl(u.email),
-      }),
-    }))
+    // Resend batch API supports up to 100 emails per call, so chunk
+    const results = []
+    for (let i = 0; i < pendingUsers.length; i += 100) {
+      const chunk = pendingUsers.slice(i, i + 100)
+      const emails = chunk.map((u) => ({
+        from: NEWSLETTER_FROM,
+        to: u.email,
+        subject: template.subject,
+        react: Component({
+          issueNumber: template.issueNumber,
+          issueDate: template.issueDate,
+          unsubscribeUrl: getUnsubscribeUrl(u.email),
+        }),
+      }))
 
-    const { data, error } = await resend.batch.send(emails)
-    if (error) {
-      console.error('[Email Admin] Batch send error:', JSON.stringify(error))
-      return NextResponse.json({ error: (error as any).message || 'Resend batch send failed' }, { status: 500 })
+      const { data, error } = await resend.batch.send(emails)
+      if (error) {
+        console.error('[Email Admin] Batch send error:', JSON.stringify(error))
+        // Record the recipients we already sent to before the error
+        if (i > 0) {
+          const sentSoFar = pendingUsers.slice(0, i)
+          await db.insert(newsletterRecipients).values(
+            sentSoFar.map((u) => ({ templateName, userId: u.id, email: u.email }))
+          )
+        }
+        return NextResponse.json({
+          error: (error as any).message || 'Resend batch send failed',
+          sentBeforeError: i,
+        }, { status: 500 })
+      }
+      results.push(data)
     }
 
-    // Record each recipient
+    // Record all recipients
     await db.insert(newsletterRecipients).values(
-      batch.map((u) => ({
-        templateName,
-        userId: u.id,
-        email: u.email,
-      }))
+      pendingUsers.map((u) => ({ templateName, userId: u.id, email: u.email }))
     )
 
-    // Record the batch send in history
+    // Record the send in history
     await db.insert(newsletterSends).values({
       templateName: template.name,
       subject: template.subject,
-      recipientCount: batch.length,
+      recipientCount: pendingUsers.length,
       sentBy: session.user.id,
     })
 
     return NextResponse.json({
       success: true,
-      sentCount: batch.length,
-      remainingUsers: pendingUsers.length - batch.length,
+      sentCount: pendingUsers.length,
       totalSubscribed: subscribedUsers.length,
       alreadySent: alreadySentUserIds.length,
-      quotaRemaining: remainingQuota - batch.length,
     })
   } catch (error: any) {
     console.error('[Email Admin] Send error:', error?.message, error?.stack)

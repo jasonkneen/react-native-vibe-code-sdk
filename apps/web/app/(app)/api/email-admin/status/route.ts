@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/index'
 import { db, user, emailPreferences, newsletterRecipients, eq, sql } from '@/lib/db'
 
-const DAILY_LIMIT = 100
-
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
   const adminEmail = process.env.ADMIN_EMAIL
@@ -50,31 +48,6 @@ export async function GET(request: NextRequest) {
       .filter((u) => !sentUserIds.has(u.id))
       .map((u) => ({ email: u.email, name: u.name }))
 
-    // Quota info
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const recentSends = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(newsletterRecipients)
-      .where(sql`${newsletterRecipients.sentAt} > ${twentyFourHoursAgo}`)
-
-    const sentInLast24h = Number(recentSends[0]?.count || 0)
-    const quotaRemaining = Math.max(0, DAILY_LIMIT - sentInLast24h)
-
-    // Next available time
-    let nextAvailable: string | null = null
-    if (quotaRemaining === 0) {
-      const oldestRecent = await db
-        .select({ sentAt: newsletterRecipients.sentAt })
-        .from(newsletterRecipients)
-        .where(sql`${newsletterRecipients.sentAt} > ${twentyFourHoursAgo}`)
-        .orderBy(newsletterRecipients.sentAt)
-        .limit(1)
-
-      if (oldestRecent[0]?.sentAt) {
-        nextAvailable = new Date(oldestRecent[0].sentAt.getTime() + 24 * 60 * 60 * 1000).toISOString()
-      }
-    }
-
     return NextResponse.json({
       templateName,
       totalSubscribed: subscribedUsers.length,
@@ -82,9 +55,6 @@ export async function GET(request: NextRequest) {
       pendingCount: pending.length,
       sent,
       pending,
-      quotaRemaining,
-      sentInLast24h,
-      nextAvailable,
     })
   } catch (error: any) {
     console.error('[Email Admin] Status error:', error?.message)
