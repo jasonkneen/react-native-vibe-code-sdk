@@ -202,6 +202,12 @@ export function HomeClient({ initialSession, opencodeEnabled = false }: HomeClie
       has_images: files.length > 0,
     })
 
+    posthog.capture('new_app_generation', {
+      prompt: chatInput,
+      template: selectedTemplate,
+      model: languageModel.model,
+    })
+
     // Clear files and skills after navigation
     setFiles([])
     setSelectedSkills([])
