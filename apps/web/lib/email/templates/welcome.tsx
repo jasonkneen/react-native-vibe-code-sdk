@@ -124,14 +124,14 @@ export default function WelcomeEmail({ name, unsubscribeUrl }: WelcomeEmailProps
           <Text style={footer}>
           <Link target='_blank' href="https://reactnativevibecode.com" style={link}>React Native Vibe Code</Link> - Text to mobile & web apps in seconds
           </Text>
-          {unsubscribeUrl && (
+          {/* {unsubscribeUrl && (
             <Text style={footer}>
               <Link href={unsubscribeUrl} style={link}>
                 Unsubscribe
               </Link>{' '}
               from future emails
             </Text>
-          )}
+          )} */}
         </Container>
       </Body>
     </Html>
