@@ -116,7 +116,7 @@ export default function WelcomeEmail({ name, unsubscribeUrl }: WelcomeEmailProps
 
           <Text style={footer}>
             Need help?{' '}
-            <Link href="mailto:contact@reactnativevibecode.com" style={link}>
+            <Link href="mailto:rodrigo@reactnativevibecode.com" style={link}>
               Contact us
             </Link>
           </Text>
