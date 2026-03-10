@@ -1040,6 +1040,9 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
 
               // Refresh currentProject from DB to pick up new sandboxId
               await refreshProjectData()
+
+              // Reload chat history after sandbox resume
+              setIsHistoryLoaded(false)
             }
           } catch (error) {
             console.error('[Server Check] Error resuming container:', error)
@@ -1326,6 +1329,9 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
 
                 // Refresh currentProject from DB to pick up new sandboxId
                 await refreshProjectData()
+
+                // Reload chat history after sandbox resume
+                setIsHistoryLoaded(false)
               } else {
                 console.error('[Visibility] Failed to resume container:', result.error)
               }
@@ -1952,6 +1958,13 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
     }
   }, [session?.user?.id, projectId, isHistoryLoaded, isChatLoading, streamStatus, firstMessage, setMessages])
 
+  // Re-load chat history after sandbox resume (when isHistoryLoaded is reset to false)
+  useEffect(() => {
+    if (!isHistoryLoaded && hasRun.current && session?.user?.id && projectId) {
+      loadChatHistory()
+    }
+  }, [isHistoryLoaded, loadChatHistory])
+
   const createContainer = async (project: any) => {
     console.log('Creating container for project:', project.id)
     setIsPreviewLoading(true)
@@ -2056,6 +2069,9 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
           template: templateOverride || project.template || 'react-native-expo',
           recreated: result.recreated,
         })
+
+        // Reload chat history after sandbox resume
+        setIsHistoryLoaded(false)
 
         posthog.capture('container_resumed', {
           projectId: project.id,
@@ -2705,7 +2721,7 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
           </SheetContent>
         </Sheet>
 
-        <Sheet open={mobileSidebarPanel === 'backend'} onOpenChange={(open) => !open && setMobileSidebarPanel(null)}>
+        {/* <Sheet open={mobileSidebarPanel === 'backend'} onOpenChange={(open) => !open && setMobileSidebarPanel(null)}>
           <SheetContent side="left" className="w-full sm:max-w-[400px] p-0">
             <VisuallyHidden.Root>
               <SheetTitle>Backend</SheetTitle>
@@ -2715,7 +2731,7 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
               onClose={() => setMobileSidebarPanel(null)}
             />
           </SheetContent>
-        </Sheet>
+        </Sheet> */}
 
         <Sheet open={mobileSidebarPanel === 'cloud'} onOpenChange={(open) => !open && setMobileSidebarPanel(null)}>
           <SheetContent side="left" className="w-full sm:max-w-[400px] p-0">
