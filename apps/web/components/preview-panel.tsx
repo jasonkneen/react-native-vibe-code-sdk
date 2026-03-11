@@ -159,7 +159,7 @@ export function PreviewPanel({
     setIsRestartingServer(true)
 
     try {
-      const userID = localStorage.getItem('userId')
+      const userID = userId
 
       const response = await fetch('/api/restart-server', {
         method: 'POST',

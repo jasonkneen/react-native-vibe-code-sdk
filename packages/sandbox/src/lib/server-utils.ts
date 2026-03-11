@@ -210,6 +210,18 @@ export async function startExpoServer(
     console.log('[Server Utils] Bun not found in PATH:', error)
   }
 
+  // Patch app.json web output to "static" if needed — apps with "output": "server"
+  // (SSR/RSC mode) can prevent expo start --web from serving on port 8081 in dev.
+  console.log('[Server Utils] Patching app.json web output to static if needed...')
+  try {
+    await sandbox.commands.run(
+      `node -e "try{const fs=require('fs'),p='/home/user/app/app.json',a=JSON.parse(fs.readFileSync(p,'utf8'));if(a.expo&&a.expo.web&&a.expo.web.output==='server'){a.expo.web.output='static';fs.writeFileSync(p,JSON.stringify(a,null,2));console.log('Patched to static');}else{console.log('No patch needed');}}catch(e){console.log('Skip patch:',e.message);}"`,
+      { timeoutMs: 5000 }
+    )
+  } catch (error) {
+    console.log('[Server Utils] app.json patch failed (non-fatal):', error)
+  }
+
   // Start the web server in background
   // Build the command based on tunnel mode
   // In LAN mode, use `bunx expo start` directly to bypass the ngrok-patched start script
