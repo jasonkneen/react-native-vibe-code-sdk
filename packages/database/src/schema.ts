@@ -585,6 +585,30 @@ export const newsletterRecipientsRelations = relations(newsletterRecipients, ({ 
   }),
 }))
 
+// React Native Space waitlist
+export const spaceWaitlist = pgTable('space_waitlist', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow(),
+})
+
+export const spaceWaitlistSends = pgTable('space_waitlist_sends', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateName: text('template_name').notNull(),
+  subject: text('subject').notNull(),
+  recipientCount: integer('recipient_count').notNull(),
+  sentBy: text('sent_by').references(() => user.id, { onDelete: 'set null' }),
+  sentAt: timestamp('sent_at').defaultNow(),
+})
+
+export const spaceWaitlistRecipients = pgTable('space_waitlist_recipients', {
+  templateName: text('template_name').notNull(),
+  email: text('email').notNull(),
+  sentAt: timestamp('sent_at').defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.templateName, table.email] }),
+}))
+
 // UI Prompts gallery table
 export const uiPrompts = pgTable('ui_prompts', {
   id: uuid('id').defaultRandom().primaryKey(),
