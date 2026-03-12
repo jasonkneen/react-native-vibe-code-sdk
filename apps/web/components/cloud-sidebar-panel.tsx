@@ -3,16 +3,6 @@
 import { useState } from 'react'
 import posthog from 'posthog-js'
 import { Button } from '@/components/ui/button'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Database, Zap, Cloud, HardDrive, CheckCircle2, Loader2, ExternalLink, LayoutDashboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { ConvexDashboardModal } from '@/components/convex-dashboard-modal'
@@ -43,7 +33,6 @@ export function CloudSidebarPanel({
   onClose,
 }: CloudSidebarPanelProps) {
   const [isEnabling, setIsEnabling] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showDashboard, setShowDashboard] = useState(false)
   const [showSetupComplete, setShowSetupComplete] = useState(false)
 
@@ -72,8 +61,7 @@ export function CloudSidebarPanel({
 
       posthog.capture('cloud_enabled', { project_id: projectId })
       onCloudEnabled?.()
-      // Delay to let the AlertDialog fully unmount before opening the new dialog
-      setTimeout(() => setShowSetupComplete(true), 300)
+      setShowSetupComplete(true)
     } catch (error) {
       console.error('Failed to enable cloud:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to enable cloud')
@@ -187,7 +175,7 @@ export function CloudSidebarPanel({
 
                 <Button
                   className="w-full"
-                  onClick={() => setShowConfirmDialog(true)}
+                  onClick={handleEnableCloud}
                   disabled={isEnabling || !projectId}
                 >
                   {isEnabling ? (
@@ -245,29 +233,6 @@ export function CloudSidebarPanel({
           </div>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Enable Cloud Backend?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>This will set up a real-time database for your project. Once enabled:</p>
-              <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-                <li>A Convex backend will be provisioned</li>
-                <li>Database files will be added to your project</li>
-                <li>The AI will be able to create backend logic</li>
-                <li>Data will sync in real-time across devices</li>
-              </ul>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleEnableCloud}>
-              Enable Cloud
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }
