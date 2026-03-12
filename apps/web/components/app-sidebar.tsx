@@ -42,6 +42,7 @@ interface AppSidebarProps {
   cloudEnabled?: boolean
   cloudDeploymentUrl?: string
   onCloudEnabled?: () => void
+  onRequestChange?: (prompt: string) => void
 }
 
 function SidebarToggle() {
@@ -317,6 +318,7 @@ export function AppSidebar({
   cloudEnabled,
   cloudDeploymentUrl,
   onCloudEnabled,
+  onRequestChange,
 }: AppSidebarProps) {
   const [internalActivePanel, setInternalActivePanel] = useState<string | null>(null)
   const [isFirstOpen, setIsFirstOpen] = useState(true)
@@ -417,6 +419,7 @@ export function AppSidebar({
               cloudEnabled={cloudEnabled || false}
               deploymentUrl={cloudDeploymentUrl}
               onCloudEnabled={onCloudEnabled}
+              onRequestChange={onRequestChange}
               onClose={() => handlePanelChange(null)}
             />
           </PanelContent>

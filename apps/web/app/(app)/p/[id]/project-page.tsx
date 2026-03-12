@@ -2580,6 +2580,7 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
               cloudEnabled={cloudEnabled}
               cloudDeploymentUrl={cloudDeploymentUrl}
               onCloudEnabled={handleCloudEnabled}
+              onRequestChange={(prompt) => setInput(prompt)}
             >
             <div className="flex h-full w-full">
           {/* Fixed width Chat/History panel - 500px */}
@@ -2783,6 +2784,7 @@ export function ProjectPageInternal({ opencodeEnabled = false, template: templat
               cloudEnabled={cloudEnabled}
               deploymentUrl={cloudDeploymentUrl}
               onCloudEnabled={handleCloudEnabled}
+              onRequestChange={(prompt) => setInput(prompt)}
               onClose={() => setMobileSidebarPanel(null)}
             />
           </SheetContent>

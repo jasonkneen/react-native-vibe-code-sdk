@@ -13,15 +13,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Database, Zap, Cloud, HardDrive, CheckCircle2, Loader2, ExternalLink, LayoutDashboard } from 'lucide-react'
+import { Database, Zap, Cloud, HardDrive, CheckCircle2, Loader2, ExternalLink, LayoutDashboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { ConvexDashboardModal } from '@/components/convex-dashboard-modal'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+
+const CONVEX_SETUP_PROMPT = 'We have added Convex functionality to the app. Review the codebase and update the current functionality to make use of the database and any needed queries, mutations, and Convex features you see fit.'
 
 interface CloudSidebarPanelProps {
   projectId?: string
   cloudEnabled: boolean
   deploymentUrl?: string
   onCloudEnabled?: () => void
+  onRequestChange?: (prompt: string) => void
   onClose: () => void
 }
 
@@ -30,11 +39,13 @@ export function CloudSidebarPanel({
   cloudEnabled,
   deploymentUrl,
   onCloudEnabled,
+  onRequestChange,
   onClose,
 }: CloudSidebarPanelProps) {
   const [isEnabling, setIsEnabling] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showDashboard, setShowDashboard] = useState(false)
+  const [showSetupComplete, setShowSetupComplete] = useState(false)
 
   const handleEnableCloud = async () => {
     if (!projectId) {
@@ -60,9 +71,9 @@ export function CloudSidebarPanel({
         throw new Error(data.error || 'Failed to enable cloud')
       }
 
-      toast.success('Cloud enabled successfully! Your database is now ready.')
       posthog.capture('cloud_enabled', { project_id: projectId })
       onCloudEnabled?.()
+      setShowSetupComplete(true)
     } catch (error) {
       console.error('Failed to enable cloud:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to enable cloud')
@@ -202,6 +213,38 @@ export function CloudSidebarPanel({
         onOpenChange={setShowDashboard}
         projectId={projectId}
       />
+
+      <Dialog open={showSetupComplete} onOpenChange={setShowSetupComplete}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Convex is Setup and Ready
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              If you want to add backend functionalities on top of the app, you need to make an extra prompt request to ask the agent to add the functionality to your current working app.
+            </p>
+            <div className="p-3 bg-muted/50 rounded-lg border">
+              <p className="text-sm italic text-foreground">
+                &ldquo;{CONVEX_SETUP_PROMPT}&rdquo;
+              </p>
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => {
+                onRequestChange?.(CONVEX_SETUP_PROMPT)
+                setShowSetupComplete(false)
+                onClose()
+              }}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Request Change
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
