@@ -41,6 +41,7 @@ interface MobileBurgerMenuProps {
   onOpenSubscriptionModal: () => void
   onOpenUserSettingsModal: () => void
   onOpenProjectSettingsModal: () => void
+  onOpenAppStoreSubmissions: () => void
   onSignOut?: () => void
   onClose: () => void
 }
@@ -56,6 +57,7 @@ export function MobileBurgerMenu({
   onOpenSubscriptionModal,
   onOpenUserSettingsModal,
   onOpenProjectSettingsModal,
+  onOpenAppStoreSubmissions,
   onSignOut,
   onClose,
 }: MobileBurgerMenuProps) {
@@ -211,8 +213,7 @@ export function MobileBurgerMenu({
 
         <button
           onClick={() => {
-            // Open publish flow - this will need to open a modal or navigate
-            toast.info('Opening publish options...')
+            onOpenAppStoreSubmissions()
             onClose()
           }}
           disabled={!projectId || !sandboxId || !session?.user?.id}

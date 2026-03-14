@@ -57,6 +57,9 @@ interface PreviewPanelProps {
   // Props for ProjectHeaderActions
   projectTitle?: string
   session?: Session | null
+  // External trigger to open App Store Submissions modal (used by mobile menu)
+  openAppStoreSubmissions?: boolean
+  onOpenAppStoreSubmissionsChange?: (open: boolean) => void
 }
 
 export function PreviewPanel({
@@ -82,6 +85,8 @@ export function PreviewPanel({
   // Props for ProjectHeaderActions
   projectTitle,
   session,
+  openAppStoreSubmissions: externalOpenAppStoreSubmissions,
+  onOpenAppStoreSubmissionsChange,
 }: PreviewPanelProps) {
   const isMobile = useIsMobile()
   const { isDevMode } = useDevMode()
@@ -123,6 +128,14 @@ export function PreviewPanel({
   const [internalContentMode, setInternalContentMode] = useState<'preview' | 'code'>('preview')
   const contentMode = externalContentMode ?? internalContentMode
   const setContentMode = onContentModeChange ?? setInternalContentMode
+
+  // Sync external App Store Submissions trigger with internal state
+  useEffect(() => {
+    if (externalOpenAppStoreSubmissions) {
+      setShowAppStoreSubmissions(true)
+      onOpenAppStoreSubmissionsChange?.(false)
+    }
+  }, [externalOpenAppStoreSubmissions, onOpenAppStoreSubmissionsChange])
 
   // Update selectedTab when mobileView prop changes on mobile devices
   useEffect(() => {
