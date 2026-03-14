@@ -246,7 +246,7 @@ export function ProjectHeaderActions({
           onProjectUpdate?.(updatedProject)
         }
         if (currentProject?.cloudflareProjectName || currentProject?.deployedUrl || deployedUrl) {
-          setDeployedUrl(`https://${trimmedDomain}.pages.dev`)
+          setDeployedUrl(`https://${trimmedDomain}.capsulethis.app`)
         }
       } else {
         const error = await response.json()
@@ -262,7 +262,7 @@ export function ProjectHeaderActions({
 
   const handleCopyDomainUrl = async () => {
     const domain = customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')
-    const url = `https://${domain}.pages.dev`
+    const url = `https://${domain}.capsulethis.app`
 
     try {
       await navigator.clipboard.writeText(url)
@@ -478,7 +478,7 @@ export function ProjectHeaderActions({
                           placeholder="your-app-name"
                           autoFocus
                         />
-                        <span className="pr-3 text-sm text-muted-foreground whitespace-nowrap">.pages.dev</span>
+                        <span className="pr-3 text-sm text-muted-foreground whitespace-nowrap">.capsulethis.app</span>
                       </div>
                       <div className="flex items-center shrink-0 w-5">
                         {isCheckingDomain && (
@@ -530,7 +530,7 @@ export function ProjectHeaderActions({
                 ) : (
                   <>
                     <div className="flex-1 bg-muted rounded-md px-3 py-2 text-sm truncate font-mono">
-                      {customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')}.pages.dev
+                      {customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')}.capsulethis.app
                     </div>
                     <div className="flex gap-2">
                       <Button
