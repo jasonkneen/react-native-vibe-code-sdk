@@ -692,10 +692,10 @@ export function NavHeader({
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-muted rounded-md px-3 py-2 text-sm truncate font-mono">
                           {currentProject?.cloudflareProjectName
-                            ? `${currentProject.cloudflareProjectName}.capsulethis.app`
+                            ? `${currentProject.cloudflareProjectName}.pages.dev`
                             : deployedUrl
                               ? deployedUrl.replace(/^https?:\/\//, '')
-                              : `${projectId}.capsulethis.app`}
+                              : `${projectId}.pages.dev`}
                         </div>
                         {(currentProject?.cloudflareProjectName || deployedUrl) && (
                           <Button
@@ -704,7 +704,7 @@ export function NavHeader({
                             className="h-9 w-9 shrink-0"
                             onClick={async () => {
                               const url = currentProject?.cloudflareProjectName
-                                ? `https://${currentProject.cloudflareProjectName}.capsulethis.app`
+                                ? `https://${currentProject.cloudflareProjectName}.pages.dev`
                                 : deployedUrl
                               if (!url) return
                               try {
