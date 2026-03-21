@@ -142,18 +142,18 @@ async function injectConvexIntoLayout(sandbox: Sandbox): Promise<void> {
     newContent = CONVEX_IMPORTS + '\n' + currentContent
   }
 
-  // Wrap ThemeProvider with ConvexWrapper
-  // Find the pattern: <ThemeProvider ...>
+  // Wrap ReloadProvider with ConvexWrapper (outermost wrapper)
+  // This ensures ALL components in the tree have access to Convex,
+  // even if the AI later adds context providers between ReloadProvider and ThemeProvider
   newContent = newContent.replace(
-    /(<ThemeProvider\s+value=\{[^}]+\}>)/,
-    '<ConvexWrapper>\n          $1'
+    /(<ReloadProvider>)/,
+    '<ConvexWrapper>\n      $1'
   )
 
-  // Find the closing </ThemeProvider> and add </ConvexWrapper> after it
-  // We need to find the right </ThemeProvider> (the one that closes the main theme provider)
+  // Find the closing </ReloadProvider> and add </ConvexWrapper> after it
   newContent = newContent.replace(
-    /(<\/ThemeProvider>)(\s*<\/ReloadProvider>)/,
-    '$1\n        </ConvexWrapper>$2'
+    /(<\/ReloadProvider>)/,
+    '$1\n    </ConvexWrapper>'
   )
 
   // Write the modified content back
