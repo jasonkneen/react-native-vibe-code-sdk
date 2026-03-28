@@ -496,6 +496,129 @@ export class ClaudeCodeService {
 
       const executionDuration = Date.now() - executionStartTime
 
+      // Detect session resume failure — retry without --continue
+      // The Claude Agent SDK stores sessions on the CLI's local filesystem.
+      // If the session file is gone (sandbox restart, SDK version mismatch, etc.),
+      // the CLI exits with "No conversation found with session ID: ..." and code 1.
+      const isSessionResumeFailure = request.sessionId && (
+        (execution?.stderr?.includes('No conversation found with session ID') ?? false) ||
+        (executionError?.message?.includes('exit status 1') && !completionDetected && stdoutChunkCount < 10)
+      )
+
+      if (isSessionResumeFailure) {
+        console.warn('[Claude Code Service] 🔄 Session resume failed — retrying without --continue', {
+          sessionId: request.sessionId,
+          stderr: execution?.stderr?.substring(0, 300),
+          exitCode: execution?.exitCode,
+        })
+
+        // Clear stale session ID from DB
+        try {
+          await db.update(projects)
+            .set({ conversationId: null, updatedAt: new Date() })
+            .where(eq(projects.id, request.projectId))
+          console.log('[Claude Code Service] Cleared stale session ID from DB')
+        } catch (dbError) {
+          console.error('[Claude Code Service] Failed to clear session ID:', dbError)
+        }
+
+        // Re-run the command without --continue (fresh session)
+        completionDetected = false
+        capturedSessionId = null
+        lineBuffer = ''
+        receivedAnyOutput = false
+        stdoutChunkCount = 0
+        stderrChunkCount = 0
+        execution = undefined
+        executionError = null
+
+        const retryCommand = `cd /claude-sdk && bun start -- --prompt="${escapedMessage}"${systemPromptArg}${modelArg}${imageUrlsArg}${convexDeployArg}`
+        console.log('[Claude Code Service] 🔄 Retrying with fresh session (no --continue)')
+
+        try {
+          const retryHandle = await sandbox.commands.run(
+            retryCommand,
+            {
+              background: true as const,
+              envs: { ANTHROPIC_API_KEY: apiKeyToUse },
+              timeoutMs: sandboxTimeoutMs,
+              onStdout: (data: string) => {
+                stdoutChunkCount++
+                receivedAnyOutput = true
+                lineBuffer += data
+
+                // Same parsing logic as original — extract streaming messages
+                try {
+                  const lines = lineBuffer.split('\n')
+                  lineBuffer = lines.pop() || ''
+
+                  for (const line of lines) {
+                    const trimmedLine = line.trim()
+                    if (trimmedLine === 'CLAUDE_CODE_COMPLETE') {
+                      completionDetected = true
+                      continue
+                    }
+                    if (line.includes('"type":"system"') && line.includes('"session_id"')) {
+                      try {
+                        const jsonMatch = line.match(/Streaming:\s*(\{.+\})/)
+                        if (jsonMatch) {
+                          const parsed = JSON.parse(jsonMatch[1])
+                          if (parsed.session_id && !capturedSessionId) {
+                            capturedSessionId = parsed.session_id
+                            console.log('[Claude Code Service] Captured session ID (retry):', capturedSessionId)
+                          }
+                        }
+                      } catch (e) { /* ignore */ }
+                    }
+                    if (line.includes('"type":"result"') && line.includes('"session_id"')) {
+                      try {
+                        const jsonMatch = line.match(/Streaming:\s*(\{.+\})/)
+                        if (jsonMatch) {
+                          const parsed = JSON.parse(jsonMatch[1])
+                          if (parsed.session_id && !capturedSessionId) {
+                            capturedSessionId = parsed.session_id
+                          }
+                        }
+                      } catch (e) { /* ignore */ }
+                    }
+                    if (trimmedLine && line.includes('Streaming:')) {
+                      const messageMatch = line.match(/Streaming:\s*(.+)/)
+                      if (messageMatch && messageMatch[1]) {
+                        const messageContent = messageMatch[1].trim()
+                        if (!messageContent.includes('[Heartbeat')) {
+                          if (messageContent.includes('Task failed')) {
+                            console.error('[Claude Code Service] ❌ TASK FAILED (retry):', messageContent)
+                          }
+                          callbacks.onMessage(messageContent)
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  callbacks.onMessage(data)
+                  lineBuffer = ''
+                }
+              },
+              onStderr: (data: string) => {
+                stderrChunkCount++
+                receivedAnyOutput = true
+                console.log(`[Claude Code Service] ⚠️  stderr (retry):`, data)
+              },
+            }
+          )
+
+          execution = await retryHandle.wait()
+          console.log('[Claude Code Service] ✅ Retry completed', {
+            exitCode: execution?.exitCode,
+            stdoutChunkCount,
+            completionDetected,
+          })
+        } catch (retryError) {
+          executionError = retryError instanceof Error ? retryError : new Error(String(retryError))
+          console.error('[Claude Code Service] ❌ Retry also failed:', executionError.message)
+        }
+      }
+
       // Handle execution failure
       // Note: With spawn() we no longer hit the 120-second timeout issue that run() had
       if (executionError) {

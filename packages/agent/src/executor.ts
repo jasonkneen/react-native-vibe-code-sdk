@@ -52,6 +52,23 @@ export async function runExecutor(
 
   const messages: SDKMessage[] = []
 
+  // Suppress unhandled rejections from the Claude Agent SDK during session resume.
+  // When resume fails with "No conversation found", the SDK yields an error result
+  // AND throws an unhandled promise rejection from its internal readMessages() function.
+  // This rejection bypasses try/catch and crashes the process before retry logic can run.
+  let suppressedResumeError = false
+  const rejectHandler = (reason: any) => {
+    const msg = reason instanceof Error ? reason.message : String(reason)
+    if (msg.includes('No conversation found') || msg.includes('error result')) {
+      console.warn('Suppressed SDK unhandled rejection during resume:', msg)
+      suppressedResumeError = true
+      return // Suppress — retry logic will handle this
+    }
+    // Re-throw non-resume errors
+    throw reason
+  }
+  process.on('unhandledRejection', rejectHandler)
+
   // Heartbeat to keep connection alive during long operations
   const heartbeatInterval = setInterval(() => {
     console.log('Streaming: [Heartbeat - Agent is working...]')
@@ -171,23 +188,46 @@ export async function runExecutor(
       })) {
         messages.push(message)
 
-        // Stream slimified messages — small JSON that never spans multiple stdout chunks
-        const slimMessages = slimifyMessage(message)
-        for (const slim of slimMessages) {
-          console.log(`Streaming: ${JSON.stringify(slim)}`)
-        }
-
         // Also stream completion status separately for easier detection
         if (message.type === 'result') {
           if (message.subtype === 'success') {
+            // Stream slimified result and status
+            const slimMessages = slimifyMessage(message)
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`)
+            }
             console.log(`Streaming: Task completed successfully`)
             console.log(`Streaming: Cost: $${message.total_cost_usd.toFixed(4)}, Duration: ${(message.duration_ms / 1000).toFixed(2)}s`)
           } else {
             const errors = (message as any).errors || []
+            taskFailed = true
+
+            // When resuming, DON'T stream the error result to the frontend — we will
+            // retry with a fresh session. Streaming it would show a confusing "Task Failed"
+            // card before the retry succeeds.
+            if (withResume) {
+              console.warn('Task failed during resume — suppressing error result and breaking to retry')
+              console.warn('Resume failure details:', message.subtype, JSON.stringify(errors))
+              break
+            }
+
+            // Non-resume failure: stream the error to the frontend
+            const slimMessages = slimifyMessage(message)
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`)
+            }
             console.log(`Streaming: Task failed: ${message.subtype}`)
             console.log(`Streaming: Task failed errors: ${JSON.stringify(errors)}`)
             console.log(`Streaming: Task failed stop_reason: ${(message as any).stop_reason}`)
-            taskFailed = true
+          }
+        } else {
+          // Stream non-result messages normally (but skip during resume attempts
+          // since they'll just show a brief init before retry)
+          if (!withResume || message.type !== 'system') {
+            const slimMessages = slimifyMessage(message)
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`)
+            }
           }
         }
       }
@@ -202,18 +242,22 @@ export async function runExecutor(
         console.log('Streaming: Session resume failed, starting fresh session...')
         messages.length = 0 // Clear any partial messages
         taskFailed = false
+        // Allow any pending SDK microtasks (unhandled rejections) to settle
+        await new Promise(resolve => setTimeout(resolve, 100))
         await runQuery(false)
       } else {
         throw resumeError
       }
     }
 
-    // If task failed with resume, retry without resume
+    // If task failed with resume (broke out of loop), retry without resume
     if (taskFailed && useResume) {
       console.warn('Task failed with resume, retrying without resume...')
       console.log('Streaming: Retrying without session resume...')
       messages.length = 0
       taskFailed = false
+      // Allow any pending SDK microtasks (unhandled rejections) to settle
+      await new Promise(resolve => setTimeout(resolve, 100))
       await runQuery(false)
     }
 
@@ -230,5 +274,6 @@ export async function runExecutor(
     return { success: false, messages, error: errorMessage }
   } finally {
     clearInterval(heartbeatInterval)
+    process.removeListener('unhandledRejection', rejectHandler)
   }
 }

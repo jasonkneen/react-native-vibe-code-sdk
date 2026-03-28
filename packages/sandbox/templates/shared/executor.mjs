@@ -205,6 +205,17 @@ async function runExecutor(args, config, hooks) {
     console.error("Directory check failed:", err);
   }
   const messages = [];
+  let suppressedResumeError = false;
+  const rejectHandler = (reason) => {
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    if (msg.includes("No conversation found") || msg.includes("error result")) {
+      console.warn("Suppressed SDK unhandled rejection during resume:", msg);
+      suppressedResumeError = true;
+      return;
+    }
+    throw reason;
+  };
+  process.on("unhandledRejection", rejectHandler);
   const heartbeatInterval = setInterval(() => {
     console.log("Streaming: [Heartbeat - Agent is working...]");
   }, cfg.heartbeatInterval);
@@ -290,20 +301,36 @@ ${args.prompt}`;
         options
       })) {
         messages.push(message);
-        const slimMessages = slimifyMessage(message);
-        for (const slim of slimMessages) {
-          console.log(`Streaming: ${JSON.stringify(slim)}`);
-        }
         if (message.type === "result") {
           if (message.subtype === "success") {
+            const slimMessages = slimifyMessage(message);
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`);
+            }
             console.log(`Streaming: Task completed successfully`);
             console.log(`Streaming: Cost: $${message.total_cost_usd.toFixed(4)}, Duration: ${(message.duration_ms / 1e3).toFixed(2)}s`);
           } else {
             const errors = message.errors || [];
+            taskFailed = true;
+            if (withResume) {
+              console.warn("Task failed during resume \u2014 suppressing error result and breaking to retry");
+              console.warn("Resume failure details:", message.subtype, JSON.stringify(errors));
+              break;
+            }
+            const slimMessages = slimifyMessage(message);
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`);
+            }
             console.log(`Streaming: Task failed: ${message.subtype}`);
             console.log(`Streaming: Task failed errors: ${JSON.stringify(errors)}`);
             console.log(`Streaming: Task failed stop_reason: ${message.stop_reason}`);
-            taskFailed = true;
+          }
+        } else {
+          if (!withResume || message.type !== "system") {
+            const slimMessages = slimifyMessage(message);
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`);
+            }
           }
         }
       }
@@ -316,6 +343,7 @@ ${args.prompt}`;
         console.log("Streaming: Session resume failed, starting fresh session...");
         messages.length = 0;
         taskFailed = false;
+        await new Promise((resolve2) => setTimeout(resolve2, 100));
         await runQuery(false);
       } else {
         throw resumeError;
@@ -326,6 +354,7 @@ ${args.prompt}`;
       console.log("Streaming: Retrying without session resume...");
       messages.length = 0;
       taskFailed = false;
+      await new Promise((resolve2) => setTimeout(resolve2, 100));
       await runQuery(false);
     }
     console.log("Query completed successfully");
@@ -339,6 +368,7 @@ ${args.prompt}`;
     return { success: false, messages, error: errorMessage };
   } finally {
     clearInterval(heartbeatInterval);
+    process.removeListener("unhandledRejection", rejectHandler);
   }
 }
 
