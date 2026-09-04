@@ -15,6 +15,7 @@ export interface Plan {
   name: string
   slug: string
   price: number
+  originalPrice: number
   period: string
   features: string[]
   productId?: string

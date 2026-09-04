@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { Sandbox } from "@e2b/code-interpreter"
+import { connectSandbox } from "@/lib/sandbox-connect"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -10,9 +10,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    let sandbox: InstanceType<typeof Sandbox>
+    let sandbox: NonNullable<Awaited<ReturnType<typeof connectSandbox>>>
     try {
-      sandbox = await Sandbox.connect(sandboxId)
+      sandbox = await connectSandbox(sandboxId)
     } catch {
       // Sandbox is dead/paused — return empty assets instead of 500
       return NextResponse.json({ assets: [] })

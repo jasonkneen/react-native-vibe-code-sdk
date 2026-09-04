@@ -14,6 +14,8 @@ export interface ExecutorArgs {
   model?: string
   /** Array of image URLs to attach to the prompt */
   imageUrls?: string[]
+  /** Session ID to resume a previous conversation */
+  sessionId?: string
 }
 
 /**
@@ -45,6 +47,8 @@ export type SessionHook = (
 export interface ExecutorHooks {
   /** Hooks to run when the session ends */
   onSessionEnd?: SessionHook[]
+  /** Hooks to run after a tool is used (e.g., after Write/Edit) */
+  onPostToolUse?: SessionHook[]
 }
 
 /**

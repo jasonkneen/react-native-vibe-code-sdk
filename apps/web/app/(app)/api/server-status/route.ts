@@ -1,9 +1,11 @@
 import { db } from '@/lib/db'
 import { projects } from '@react-native-vibe-code/database'
 import { startExpoServer } from '@/lib/server-utils'
-import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
+import type { Sandbox } from '@e2b/code-interpreter'
 import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
+import { tunnelMode as tunnelModeFlag } from '@/flags'
 
 export const maxDuration = 120
 
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     // Try to connect to the existing sandbox
     try {
-      sandbox = await Sandbox.connect(project.sandboxId)
+      sandbox = await connectSandbox(project.sandboxId)
       console.log(`Connected to sandbox: ${sandbox.sandboxId}`)
     } catch (error) {
       console.log(`Failed to resume sandbox ${project.sandboxId}:`, error)
@@ -92,10 +94,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Start Expo server for React Native projects
-    if (project.template === 'react-native-expo') {
+    // Start Expo server for React Native projects (both production and testing templates)
+    if (project.template === 'react-native-expo' || project.template === 'expo-testing') {
       try {
-        const serverResult = await startExpoServer(sandbox, project.id)
+        const currentTunnelMode = await tunnelModeFlag()
+        const serverResult = await startExpoServer(sandbox, project.id, undefined, currentTunnelMode as any)
         return Response.json({
           success: true,
           projectId: project.id,
@@ -104,6 +107,7 @@ export async function POST(req: NextRequest) {
           url: serverResult.url,
           serverReady: serverResult.serverReady,
           cached: false,
+          tunnelMode: currentTunnelMode,
         })
       } catch (error) {
         console.log('Error starting Expo server:', error)

@@ -9,6 +9,7 @@ import {
   varchar,
   json,
   jsonb,
+  integer,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { CONFIG } from '@react-native-vibe-code/config'
@@ -117,6 +118,7 @@ export const projects = pgTable('projects', {
   template: text('template').notNull(), // Template type (react-native-expo, etc.)
   status: text('status').notNull().default('active'), // active, paused, completed
   conversationId: text('conversation_id'), // Claude Code conversation ID
+  agentType: text('agent_type').default('claude-code'), // 'claude-code' | 'opencode'
   githubRepo: text('github_repo'), // GitHub repository name for recreation
   isPublic: boolean('is_public').default(true), // Whether project is publicly accessible (public by default, paid users can make private)
   forkedFrom: uuid('forked_from').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }), // Original project if this is a fork
@@ -185,6 +187,24 @@ export const convexProjectCredentials = pgTable('convex_project_credentials', {
   updatedAt: timestamp('updated_at').defaultNow(),
 })
 
+// Project environment variables table
+export const projectEnvVars = pgTable('project_env_vars', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  value: text('value').notNull(),
+  type: text('type', { enum: ['frontend', 'backend'] })
+    .notNull()
+    .default('frontend'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
 // Commits table for tracking git commits and static bundles
 export const commits = pgTable('commits', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -238,6 +258,15 @@ export const conversationMessages = pgTable('conversation_messages', {
   metadata: text('metadata'), // JSON string for additional data like file operations
 })
 
+export const sandboxSessions = pgTable('sandbox_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  sandboxId: text('sandbox_id').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 export const chat = pgTable('Chat', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   createdAt: timestamp('createdAt').notNull(),
@@ -273,6 +302,7 @@ export const userRelations = relations(user, ({ many, one }) => ({
   promptMessages: many(promptMessages),
   twitterLink: one(twitterLinks),
   privacyPolicies: many(privacyPolicies),
+  emailPreferences: one(emailPreferences),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -386,6 +416,17 @@ export const convexProjectCredentialsRelations = relations(
   }),
 )
 
+export const projectEnvVarsRelations = relations(projectEnvVars, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectEnvVars.projectId],
+    references: [projects.id],
+  }),
+  user: one(user, {
+    fields: [projectEnvVars.userId],
+    references: [user.id],
+  }),
+}))
+
 export const chatRelations = relations(chat, ({ one, many }) => ({
   user: one(user, {
     fields: [chat.userId],
@@ -417,8 +458,9 @@ export const twitterLinks = pgTable('twitter_links', {
 export const xBotReplies = pgTable('x_bot_replies', {
   id: uuid('id').primaryKey().defaultRandom(),
   tweetId: text('tweet_id').notNull().unique(), // The mention tweet ID we replied to
-  replyTweetId: text('reply_tweet_id'), // Our reply tweet ID
+  replyTweetId: text('reply_tweet_id'), // Our final reply tweet ID
   authorId: text('author_id'), // The author who mentioned us
+  authorUsername: text('author_username'), // Twitter @handle of the mentioning user
   tweetText: text('tweet_text'), // Original tweet text (for debugging)
   status: text('status').notNull().default('pending'), // pending, generating, replied, failed, skipped
   errorMessage: text('error_message'), // Error message if failed
@@ -428,8 +470,13 @@ export const xBotReplies = pgTable('x_bot_replies', {
   isAppRequest: boolean('is_app_request').default(false), // AI classification result
   appDescription: text('app_description'), // Extracted app description from AI classification
   generationStatus: text('generation_status'), // 'pending', 'generating', 'completed', 'failed'
-  replyContent: text('reply_content'), // What we replied with
-  repliedAt: timestamp('replied_at'), // When we sent the reply
+  // First reply ("creating your app") tracking
+  firstReplyTweetId: text('first_reply_tweet_id'), // Tweet ID of the "creating your app" reply
+  firstReplyContent: text('first_reply_content'), // Content of the first reply
+  firstRepliedAt: timestamp('first_replied_at'), // When the first reply was sent
+  // Final reply ("app is ready") tracking
+  replyContent: text('reply_content'), // What we replied with (final reply)
+  repliedAt: timestamp('replied_at'), // When we sent the final reply
   createdAt: timestamp('created_at').defaultNow(),
 })
 
@@ -437,6 +484,7 @@ export const xBotReplies = pgTable('x_bot_replies', {
 export const xBotState = pgTable('x_bot_state', {
   id: text('id').primaryKey().default('default'), // Single row with id='default'
   lastTweetId: text('last_tweet_id'), // Last processed tweet ID for since_id
+  refreshToken: text('refresh_token'), // OAuth 2.0 refresh token (rotates on each use)
   updatedAt: timestamp('updated_at').defaultNow(),
 })
 
@@ -478,6 +526,107 @@ export const privacyPoliciesRelations = relations(privacyPolicies, ({ one }) => 
   }),
 }))
 
+// Email preferences table for newsletter opt-in/out
+export const emailPreferences = pgTable('email_preferences', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  subscribedToNewsletter: boolean('subscribed_to_newsletter').default(true).notNull(),
+  unsubscribedAt: timestamp('unsubscribed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+})
+
+// Newsletter sends table for tracking sent newsletters
+export const newsletterSends = pgTable('newsletter_sends', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  templateName: text('template_name').notNull(),
+  subject: text('subject').notNull(),
+  recipientCount: integer('recipient_count').notNull(),
+  sentBy: text('sent_by')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  sentAt: timestamp('sent_at').defaultNow(),
+})
+
+export const emailPreferencesRelations = relations(emailPreferences, ({ one }) => ({
+  user: one(user, {
+    fields: [emailPreferences.userId],
+    references: [user.id],
+  }),
+}))
+
+export const newsletterSendsRelations = relations(newsletterSends, ({ one, many }) => ({
+  sentByUser: one(user, {
+    fields: [newsletterSends.sentBy],
+    references: [user.id],
+  }),
+  recipients: many(newsletterRecipients),
+}))
+
+// Individual recipient tracking per newsletter send
+export const newsletterRecipients = pgTable('newsletter_recipients', {
+  templateName: text('template_name').notNull(), // e.g. "newsletter_1"
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  sentAt: timestamp('sent_at').defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.templateName, table.userId] }),
+}))
+
+export const newsletterRecipientsRelations = relations(newsletterRecipients, ({ one }) => ({
+  user: one(user, {
+    fields: [newsletterRecipients.userId],
+    references: [user.id],
+  }),
+}))
+
+// React Native Space waitlist
+export const spaceWaitlist = pgTable('space_waitlist', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow(),
+})
+
+export const spaceWaitlistSends = pgTable('space_waitlist_sends', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateName: text('template_name').notNull(),
+  subject: text('subject').notNull(),
+  recipientCount: integer('recipient_count').notNull(),
+  sentBy: text('sent_by').references(() => user.id, { onDelete: 'set null' }),
+  sentAt: timestamp('sent_at').defaultNow(),
+})
+
+export const spaceWaitlistRecipients = pgTable('space_waitlist_recipients', {
+  templateName: text('template_name').notNull(),
+  email: text('email').notNull(),
+  sentAt: timestamp('sent_at').defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.templateName, table.email] }),
+}))
+
+// UI Prompts gallery table
+export const uiPrompts = pgTable('ui_prompts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  slug: varchar('slug', { length: 255 }).notNull().unique(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description').notNull(),
+  prompt: text('prompt').notNull(),
+  thumbnailUrl: text('thumbnail_url').notNull(),
+  screenshotUrls: json('screenshot_urls').$type<string[]>().default([]),
+  videoPreviewUrl: text('video_preview_url'),
+  remixUrl: text('remix_url'),
+  tags: json('tags').$type<string[]>().default([]),
+  viewCount: integer('view_count').default(0).notNull(),
+  featured: boolean('featured').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
 export type User = typeof user.$inferSelect
 export type Team = typeof teams.$inferSelect
 export type UserTeam = typeof usersTeams.$inferSelect
@@ -488,7 +637,14 @@ export type Subscription = typeof subscriptions.$inferSelect
 export type PromptMessage = typeof promptMessages.$inferSelect
 export type Commit = typeof commits.$inferSelect
 export type ConvexProjectCredential = typeof convexProjectCredentials.$inferSelect
+export type ProjectEnvVar = typeof projectEnvVars.$inferSelect
+export type NewProjectEnvVar = typeof projectEnvVars.$inferInsert
 export type TwitterLink = typeof twitterLinks.$inferSelect
 export type XBotReply = typeof xBotReplies.$inferSelect
 export type XBotState = typeof xBotState.$inferSelect
 export type PrivacyPolicy = typeof privacyPolicies.$inferSelect
+export type UiPrompt = typeof uiPrompts.$inferSelect
+export type NewUiPrompt = typeof uiPrompts.$inferInsert
+export type EmailPreference = typeof emailPreferences.$inferSelect
+export type NewsletterSend = typeof newsletterSends.$inferSelect
+export type NewsletterRecipient = typeof newsletterRecipients.$inferSelect

@@ -23,9 +23,15 @@
     "db:migrate": "turbo run db:migrate --filter=@react-native-vibe-code/database",
     "db:studio": "turbo run db:studio --filter=@react-native-vibe-code/database",
     "db:push": "turbo run db:push --filter=@react-native-vibe-code/database",
+    "build:agent": "turbo run build:standalone --filter=@react-native-vibe-code/agent",
+    "deploy:executor": "pnpm build:agent && pnpm build:sandbox:expo && pnpm build:sandbox:expo-testing && pnpm build:sandbox:github",
     "build:sandbox:expo": "turbo run build:sandbox:expo --filter=@react-native-vibe-code/sandbox",
     "build:sandbox:tamagui": "turbo run build:sandbox:tamagui --filter=@react-native-vibe-code/sandbox",
     "build:sandbox:github": "turbo run build:sandbox:github --filter=@react-native-vibe-code/sandbox",
+    "build:sandbox:expo-testing": "turbo run build:sandbox:expo-testing --filter=@react-native-vibe-code/sandbox",
+    "build:sandbox:creative-suite": "turbo run build:sandbox:creative-suite --filter=@react-native-vibe-code/sandbox",
+    "build:sandbox:creative-suite:dev": "turbo run build:sandbox:creative-suite:dev --filter=@react-native-vibe-code/sandbox",
+    "x-bot:register-webhook": "npx tsx apps/web/scripts/register-x-webhook.ts",
     "e2b:kill-all": "e2b sandbox kill --all",
     "e2b:kill": "e2b sandbox kill",
     "e2b:connect": "e2b sandbox connect",
@@ -175,6 +181,7 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
     "turbo": "^2.5.3",
     "typescript": "^5.5.4",
     "vitest": "^4.0.18"
@@ -192,6 +199,11 @@
     },
     "patchedDependencies": {
       "react-placeholder-typing@1.0.11": "patches/react-placeholder-typing@1.0.11.patch"
+    },
+    "overrides": {
+      "@types/pg": "8.15.5",
+      "@types/react": "19.2.7",
+      "@types/react-dom": "19.2.3"
     }
   },
   "overrides": {

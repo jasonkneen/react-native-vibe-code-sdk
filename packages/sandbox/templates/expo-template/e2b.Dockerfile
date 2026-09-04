@@ -2,8 +2,11 @@
 FROM imbios/bun-node:20-slim
 
 # Fix dpkg issues and install system dependencies
+# Install gnupg first to fix GPG key issues with the base image
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
+    apt-get update -o Acquire::AllowInsecureRepositories=true && \
+    apt-get install -y --allow-unauthenticated gnupg ca-certificates && \
     apt-get update && \
     apt-get install -y --no-install-recommends --fix-broken \
     git \
@@ -11,7 +14,6 @@ RUN apt-get clean && \
     wget \
     unzip \
     zip \
-    ca-certificates \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
@@ -101,7 +103,7 @@ RUN bun init -y
 
 # Install dependencies for claude-sdk
 # Migrated to claude-agent-sdk (formerly claude-code)
-RUN bun install @anthropic-ai/claude-agent-sdk tsx execa
+RUN bun install @anthropic-ai/claude-agent-sdk execa
 
 # Install EAS CLI globally
 # RUN bun install --global eas-cli
@@ -127,8 +129,8 @@ RUN bun install --dev @types/node@^24.0.3
 # Switch back to root for file operations
 USER root
 
-# Copy the claude execution script (with image attachment support)
-COPY templates/expo-template/claude-executor.ts index.ts
+# Copy the pre-built standalone executor bundle
+COPY templates/shared/executor.mjs executor.mjs
 
 # Copy the structure script
 COPY templates/expo-template/get-structure.js get-structure.js
@@ -137,13 +139,23 @@ COPY templates/expo-template/get-structure.js get-structure.js
 COPY templates/expo-template/edit-file.js edit-file.js
 
 # Add start script to package.json
-RUN node -e "const pkg = require('./package.json'); pkg.scripts = pkg.scripts || {}; pkg.scripts.start = 'tsx index.ts'; pkg.scripts['get-structure'] = 'node get-structure.js'; pkg.scripts['edit-file'] = 'node edit-file.js'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));"
+RUN node -e "const pkg = require('./package.json'); pkg.scripts = pkg.scripts || {}; pkg.scripts.start = 'node executor.mjs'; pkg.scripts['get-structure'] = 'node get-structure.js'; pkg.scripts['edit-file'] = 'node edit-file.js'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));"
 
 # Note: ANTHROPIC_API_KEY should be set at runtime via environment variables
 # Do not hardcode API keys in the Docker image for security reasons
 
 # Pre-create generated_code directory with proper permissions
 RUN mkdir -p /claude-sdk/generated_code && chmod 755 /claude-sdk/generated_code && chown -R user:user /claude-sdk
+
+# Pre-create .claude settings directory so the SDK doesn't fail on write
+RUN mkdir -p /home/user/.claude && chown -R user:user /home/user/.claude
+
+# Install OpenCode CLI
+RUN npm i -g opencode-ai@latest && \
+    which opencode && opencode version || echo "opencode install warning: binary not found after npm install"
+
+# Pre-create OpenCode config directory
+RUN mkdir -p /home/user/.config/opencode && chown -R user:user /home/user/.config/opencode
 
 # Return to app directory and switch to user
 WORKDIR /home/user/app

@@ -2,9 +2,11 @@ import { db } from '@/lib/db'
 import { projects } from '@react-native-vibe-code/database'
 import { startExpoServer } from '@/lib/server-utils'
 import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
 import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { corsHeaders, handleCorsOptions } from '@/lib/cors'
+import { tunnelMode as tunnelModeFlag } from '@/flags'
 import { getConvexCredentials, startConvexDevServer } from '@/lib/convex/sandbox-utils'
 
 /** Call recreate-container via HTTP to avoid dynamic-import fragility */
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     // Try to connect to the existing sandbox
     try {
-      sandbox = await Sandbox.connect(project.sandboxId)
+      sandbox = await connectSandbox(project.sandboxId)
       console.log(`[Resume Container] Connected to sandbox: ${sandbox.sandboxId}`)
 
       // Check if project has Convex connected and restart convex dev server
@@ -214,10 +216,11 @@ export async function POST(req: NextRequest) {
     //   // Continue execution even if Inngest scheduling fails
     // }
 
-    // Start Expo server for React Native projects
-    if (project.template === 'react-native-expo') {
+    // Start Expo server for React Native projects (both production and testing templates)
+    if (project.template === 'react-native-expo' || project.template === 'expo-testing') {
       try {
-        const serverResult = await startExpoServer(sandbox, project.id)
+        const currentTunnelMode = await tunnelModeFlag()
+        const serverResult = await startExpoServer(sandbox, project.id, undefined, currentTunnelMode as any)
         return Response.json({
           success: true,
           projectId: project.id,
@@ -226,6 +229,7 @@ export async function POST(req: NextRequest) {
           url: serverResult.url,
           ngrokUrl: serverResult.ngrokUrl,
           serverReady: serverResult.serverReady,
+          tunnelMode: currentTunnelMode,
         }, { headers: corsHeaders })
       } catch (error) {
         console.log('Error starting Expo server:', error)

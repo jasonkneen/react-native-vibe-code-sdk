@@ -30,6 +30,9 @@ export interface AppGenerationRequest {
   sessionId?: string  // Claude SDK session ID for resumption
   claudeModel?: string  // Model ID for Claude (e.g., claude-sonnet-4-5-20250929)
   skills?: string[]  // Selected AI skills (e.g., 'anthropic-chat', 'openai-dalle-3')
+  anthropicKey?: string  // BYOK: user-provided Anthropic API key
+  moonshotKey?: string  // BYOK: user-provided Moonshot API key (for Kimi K2)
+  agentType?: string  // Agent type (claude-code, opencode, kimi-k2)
 }
 
 export interface AppGenerationResponse {
@@ -46,8 +49,8 @@ export interface AppGenerationResponse {
 
 export interface StreamingCallbacks {
   onMessage: (message: string) => void
-  onComplete: (result: AppGenerationResponse) => void
-  onError: (error: string) => void
+  onComplete: (result: AppGenerationResponse) => void | Promise<void>
+  onError: (error: string) => void | Promise<void>
 }
 
 export class ClaudeCodeService {
@@ -68,9 +71,39 @@ export class ClaudeCodeService {
 
       // Build the user message with context and skill testing instructions
       let fullMessage = request.userMessage
-      fullMessage += '\n\nCurrent working directory: /home/user'
-      if (request.selectionData?.elementId) {
-        fullMessage += `\nSelected element: ${request.selectionData.elementId}`
+      fullMessage += '\n\nCurrent working directory: /home/user/app'
+
+      // Include visual edit selection context if user selected an element
+      if (request.selectionData) {
+        const sel = request.selectionData
+        fullMessage += '\n\n--- VISUAL EDIT SELECTION ---'
+        if (sel.elementId && sel.elementId !== 'No ID') {
+          // elementId format: ComponentName:extension:line:column:nestingLevel
+          fullMessage += `\nElement ID (file reference): ${sel.elementId}`
+        }
+        if (request.fileEdition) {
+          fullMessage += `\nFile to edit: ${request.fileEdition}`
+        }
+        if (sel.tagName) {
+          fullMessage += `\nElement type: <${sel.tagName}>`
+        }
+        if (sel.content && sel.content !== 'No content') {
+          fullMessage += `\nElement content: "${sel.content}"`
+        }
+        if (sel.className && sel.className !== 'No class') {
+          fullMessage += `\nCSS classes: ${sel.className}`
+        }
+        if (sel.dataAt) {
+          fullMessage += `\nSource location (data-at): ${sel.dataAt}`
+        }
+        if (sel.dataIn) {
+          fullMessage += `\nComponent (data-in): ${sel.dataIn}`
+        }
+        if (sel.path) {
+          fullMessage += `\nDOM path: ${sel.path}`
+        }
+        fullMessage += '\n\nThe user selected this element visually. Make changes to this specific element in the referenced file and location above.'
+        fullMessage += '\n--- END VISUAL EDIT SELECTION ---'
       }
 
       // If skills are selected, append testing instructions to the prompt
@@ -102,14 +135,11 @@ export class ClaudeCodeService {
 
       let completionDetected = false
       const sdkErrors: string[] = [] // Collect SDK errors, only send after completion
+      const expoErrors: string[] = [] // Collect Expo/Metro errors to send after completion
       let capturedSessionId: string | null = null
 
-      // Add line buffering to handle partial stdout chunks
+      // Line buffering to handle partial stdout chunks
       let lineBuffer = ''
-
-      // Add JSON buffering to handle multi-chunk JSON messages
-      let jsonBuffer = ''
-      let insideJsonMessage = false
 
       // Track execution context for debugging
       const executionStartTime = Date.now()
@@ -127,6 +157,7 @@ export class ClaudeCodeService {
       let receivedAnyOutput = false
       let stdoutChunkCount = 0
       let stderrChunkCount = 0
+      let retryOptions: { command: string; envs: Record<string, string>; timeoutMs: number } | undefined
 
       try {
         // First, verify the Claude SDK is installed in the sandbox
@@ -143,7 +174,7 @@ export class ClaudeCodeService {
 
         if (checkCmd.exitCode !== 0) {
           console.error('[Claude Code Service] ❌ Claude SDK check failed!')
-          callbacks.onError('Claude SDK is not properly installed in the sandbox. Check sandbox template configuration.')
+          await callbacks.onError('Claude SDK is not properly installed in the sandbox. Check sandbox template configuration.')
           return
         }
 
@@ -161,8 +192,42 @@ export class ClaudeCodeService {
             .limit(1)
           cloudEnabled = (project?.convexProject as any)?.kind === 'connected'
           console.log('[Claude Code Service] ☁️ Cloud enabled:', cloudEnabled)
+          if (cloudEnabled) {
+            console.log('[Claude Code Service] ☁️ Convex deploy hook will be enabled')
+          }
         } catch (dbError) {
           console.error('[Claude Code Service] ❌ Failed to check cloud status:', dbError)
+        }
+
+        // Determine if this is a Kimi K2 request and resolve the API key early
+        // (used for settings, env file, and sandbox envs below)
+        const isKimiK2 = request.agentType === 'kimi-k2'
+        const apiKeyToUse = isKimiK2
+          ? (request.moonshotKey || globalThis.process.env.MOONSHOT_API_KEY || '')
+          : (request.anthropicKey || globalThis.process.env.ANTHROPIC_API_KEY || '')
+
+        // Write Claude settings to skip the WebFetch preflight call to claude.ai.
+        // Inside an E2B sandbox the preflight request (GET claude.ai/api/web/domain_info)
+        // can hang indefinitely when the packet is silently dropped rather than refused.
+        // This is a known SDK bug (GitHub #8980, #10075, #11650) with no upstream fix.
+        try {
+          const claudeSettingsDir = '/root/.claude'
+          await sandbox.commands.run(`mkdir -p ${claudeSettingsDir}`, { timeoutMs: 5000 })
+          const claudeSettings: Record<string, any> = { skipWebFetchPreflight: true }
+          // For Kimi K2, configure the Claude SDK to use Moonshot's Anthropic-compatible API
+          if (isKimiK2) {
+            claudeSettings.env = {
+              ANTHROPIC_AUTH_TOKEN: apiKeyToUse,
+              ANTHROPIC_BASE_URL: 'https://api.moonshot.ai/anthropic',
+            }
+          }
+          await sandbox.files.write(
+            `${claudeSettingsDir}/settings.json`,
+            JSON.stringify(claudeSettings, null, 2)
+          )
+          console.log('[Claude Code Service] ✅ Written Claude settings:', Object.keys(claudeSettings))
+        } catch (settingsError) {
+          console.error('[Claude Code Service] ❌ Failed to write Claude settings:', settingsError)
         }
 
         // Write the system prompt to a file in the sandbox (avoids shell escaping issues with large prompts)
@@ -197,7 +262,21 @@ export class ClaudeCodeService {
           console.log('[Claude Code Service] 📝 No image attachments to add')
         }
 
-        const command = `cd /claude-sdk && bun start -- --prompt="${escapedMessage}"${systemPromptArg}${sessionArg}${modelArg}${imageUrlsArg}`
+        // Write the API key (and optional base URL) to /claude-sdk/.env so the executor's loadEnvFile() picks it up.
+        // This is the most reliable way to pass the key since:
+        // 1. E2B's envs option may not override existing sandbox env vars
+        // 2. Shell env prefix may not propagate through bun/tsx process chain
+        // 3. The executor explicitly reads /claude-sdk/.env and sets process.env from it
+        let envContent = `ANTHROPIC_API_KEY=${apiKeyToUse}\n`
+        if (isKimiK2) {
+          envContent += `ANTHROPIC_AUTH_TOKEN=${apiKeyToUse}\n`
+          envContent += `ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic\n`
+        }
+        await sandbox.files.write('/claude-sdk/.env', envContent)
+
+        const convexDeployArg = cloudEnabled ? ' --with-convex-deploy' : ''
+
+        const command = `cd /claude-sdk && bun start -- --prompt="${escapedMessage}"${systemPromptArg}${sessionArg}${modelArg}${imageUrlsArg}${convexDeployArg}`
 
         console.log('[Claude Code Service] Executing command with session support:', {
           hasSessionId: !!request.sessionId,
@@ -208,18 +287,46 @@ export class ClaudeCodeService {
           commandLength: command.length,
         })
 
+        console.log('[Claude Code Service] 🔑 BYOK DEBUG:', {
+          hasByokKey: !!request.anthropicKey,
+          byokKeyPrefix: request.anthropicKey ? request.anthropicKey.substring(0, 10) + '...' : 'none',
+          byokKeyLength: request.anthropicKey?.length || 0,
+          usingServerKey: !request.anthropicKey,
+          usedKeyPrefix: apiKeyToUse.substring(0, 10) + '...',
+          usedKeyLength: apiKeyToUse.length,
+        })
         console.log('[Claude Code Service] ⏳ About to run command in background mode (avoids 120s timeout)...')
 
         // Use background: true to avoid E2B's internal timeout on foreground commands
         // Background mode returns a command handle that can stream output and wait for completion
+        // NOTE: We use a large explicit timeoutMs (30 min) instead of 0 because:
+        // - timeoutMs: 0 is converted to undefined by the Connect transport, sending no grpc-timeout header
+        // - Without a client-specified deadline, E2B's envd server applies its own shorter default
+        // - A large explicit value sets a server-side gRPC deadline long enough for complex agent tasks
+        const sandboxTimeoutMs = parseInt(process.env.E2B_SANDBOX_TIMEOUT_MS || '1800000', 10)
+        retryOptions = {
+          command: `cd /claude-sdk && bun start -- --prompt="${escapedMessage}"${systemPromptArg}${modelArg}${imageUrlsArg}${convexDeployArg}`,
+          envs: {
+            ANTHROPIC_API_KEY: apiKeyToUse,
+            ...(isKimiK2 && {
+              ANTHROPIC_AUTH_TOKEN: apiKeyToUse,
+              ANTHROPIC_BASE_URL: 'https://api.moonshot.ai/anthropic',
+            }),
+          },
+          timeoutMs: sandboxTimeoutMs,
+        }
         const commandHandle = await sandbox.commands.run(
           command,
           {
             background: true as const,
             envs: {
-              ANTHROPIC_API_KEY: globalThis.process.env.ANTHROPIC_API_KEY || '',
+              ANTHROPIC_API_KEY: apiKeyToUse,
+              ...(isKimiK2 && {
+                ANTHROPIC_AUTH_TOKEN: apiKeyToUse,
+                ANTHROPIC_BASE_URL: 'https://api.moonshot.ai/anthropic',
+              }),
             },
-            timeoutMs: 0, // No timeout - let it run as long as needed
+            timeoutMs: sandboxTimeoutMs, // Match sandbox lifetime to avoid premature gRPC deadline
             onStdout: (data: string) => {
             stdoutChunkCount++
             receivedAnyOutput = true
@@ -263,6 +370,17 @@ export class ClaudeCodeService {
               )
               // Store error but don't send yet - wait for task completion
               sdkErrors.push(data)
+            } else if (isExpoServerError && (
+              data.includes('SyntaxError') ||
+              data.includes('TypeError') ||
+              data.includes('ReferenceError') ||
+              data.includes('Bundling failed') ||
+              data.includes('BUNDLE') && data.includes('failed') ||
+              data.includes('ERROR') && !data.includes('error-overlay')
+            )) {
+              // Capture Expo/Metro build errors to send after completion
+              console.log('[Claude Code Service] Expo error detected (storing):', data.substring(0, 150))
+              expoErrors.push(data)
             } else {
               // Log non-error stdout for debugging
               if (data.trim() && !isExpoServerError) {
@@ -273,7 +391,7 @@ export class ClaudeCodeService {
               }
             }
 
-            // Parse and stream individual messages
+            // Parse and stream individual messages (slim format — each JSON fits on one line)
             try {
               // Split by newlines and process complete lines only
               const lines = lineBuffer.split('\n')
@@ -292,7 +410,6 @@ export class ClaudeCodeService {
                 }
 
                 // Capture session ID from init message
-                // Format: {"type":"system","subtype":"init",...,"session_id":"xyz",...}
                 if (line.includes('"type":"system"') && line.includes('"session_id"')) {
                   try {
                     const jsonMatch = line.match(/Streaming:\s*(\{.+\})/)
@@ -308,74 +425,44 @@ export class ClaudeCodeService {
                   }
                 }
 
+                // Also capture session_id from result messages
+                if (line.includes('"type":"result"') && line.includes('"session_id"')) {
+                  try {
+                    const jsonMatch = line.match(/Streaming:\s*(\{.+\})/)
+                    if (jsonMatch) {
+                      const parsed = JSON.parse(jsonMatch[1])
+                      if (parsed.session_id && !capturedSessionId) {
+                        capturedSessionId = parsed.session_id
+                        console.log('[Claude Code Service] Captured session ID from result:', capturedSessionId)
+                      }
+                    }
+                  } catch (e) {
+                    // ignore
+                  }
+                }
+
                 if (trimmedLine && line.includes('Streaming:')) {
-                  // Extract the message part after "Streaming:"
                   const messageMatch = line.match(/Streaming:\s*(.+)/)
                   if (messageMatch && messageMatch[1]) {
                     const messageContent = messageMatch[1].trim()
 
-                    // Skip heartbeat messages - they're just for keeping connection alive
+                    // Skip heartbeat messages
                     if (messageContent.includes('[Heartbeat')) {
                       continue
                     }
 
-                    console.log('[Claude Code Service] Streaming message:', messageContent.substring(0, 200))
-
-                    // Detect if this looks like it could be JSON
-                    const looksLikeJson = messageContent.startsWith('{') || messageContent.startsWith('[')
-
-                    if (looksLikeJson) {
-                      // Check if we're starting a new JSON message
-                      if (messageContent.startsWith('{') && !insideJsonMessage) {
-                        insideJsonMessage = true
-                        jsonBuffer = messageContent
-                      } else if (insideJsonMessage) {
-                        // Continue accumulating JSON
-                        jsonBuffer += messageContent
-                      }
-
-                      // Try to parse accumulated JSON
-                      try {
-                        const parsed = JSON.parse(jsonBuffer)
-
-                        // Successfully parsed - send it
-                        if (parsed && typeof parsed === 'object' && parsed.type) {
-                          callbacks.onMessage(jsonBuffer)
-                        } else {
-                          callbacks.onMessage(jsonBuffer)
-                        }
-
-                        // Reset JSON buffer
-                        jsonBuffer = ''
-                        insideJsonMessage = false
-                      } catch (jsonError) {
-                        // JSON is incomplete - check if it looks complete but invalid
-                        const openBraces = (jsonBuffer.match(/\{/g) || []).length
-                        const closeBraces = (jsonBuffer.match(/\}/g) || []).length
-                        const openBrackets = (jsonBuffer.match(/\[/g) || []).length
-                        const closeBrackets = (jsonBuffer.match(/\]/g) || []).length
-
-                        if (openBraces === closeBraces && openBrackets === closeBrackets && jsonBuffer.length > 0) {
-                          // Looks complete but invalid JSON - log error and send as plain text
-                          console.error('[Claude Code Service] Invalid JSON detected:', {
-                            buffer: jsonBuffer.substring(0, 200),
-                            error: jsonError instanceof Error ? jsonError.message : 'Parse error',
-                          })
-                          callbacks.onMessage(jsonBuffer)
-                          jsonBuffer = ''
-                          insideJsonMessage = false
-                        }
-                        // Otherwise, continue accumulating
-                      }
-                    } else {
-                      // Not JSON - send as plain text immediately
-                      callbacks.onMessage(messageContent)
+                    // Log task failure details for debugging
+                    if (messageContent.includes('Task failed')) {
+                      console.error('[Claude Code Service] ❌ TASK FAILED:', messageContent)
                     }
+
+                    // Slim messages are always small and complete — send directly
+                    callbacks.onMessage(messageContent)
                   }
                 } else if (
                   trimmedLine &&
-                  !line.includes('Received message:') && // Skip duplicate "Received message:" lines
-                  !line.includes('Streaming:') && // Skip lines we already processed
+                  !line.includes('Received message:') &&
+                  !line.includes('Streaming:') &&
                   !line.includes('Environment check:') &&
                   !line.includes('Working directory:') &&
                   !line.includes('Raw process.argv:') &&
@@ -391,17 +478,13 @@ export class ClaudeCodeService {
                   !line.includes('Query completed successfully') &&
                   !line.includes('CLAUDE_CODE_COMPLETE')
                 ) {
-                  // Send other meaningful stdout content, but filter out debug logs
                   callbacks.onMessage(trimmedLine)
                 }
               }
             } catch (error) {
               console.error('[Claude Code Service] Error parsing stdout for streaming:', error)
-              // On catastrophic error, send raw data and reset buffers
               callbacks.onMessage(data)
               lineBuffer = ''
-              jsonBuffer = ''
-              insideJsonMessage = false
             }
             },
             onStderr: (data: string) => {
@@ -442,41 +525,204 @@ export class ClaudeCodeService {
         console.error('[Claude Code Service] This likely means the Claude SDK failed to start or execute')
 
         // Treat this as an error and notify the user
-        callbacks.onError('Claude SDK failed to produce any output. The SDK may not be properly installed in the sandbox.')
+        await callbacks.onError('Claude SDK failed to produce any output. The SDK may not be properly installed in the sandbox.')
         return
       }
 
       const executionDuration = Date.now() - executionStartTime
 
+      // Detect session resume failure — retry without --continue
+      // The Claude Agent SDK stores sessions on the CLI's local filesystem.
+      // If the session file is gone (sandbox restart, SDK version mismatch, etc.),
+      // the CLI exits with "No conversation found with session ID: ..." and code 1.
+      const isSessionResumeFailure = request.sessionId && (
+        (execution?.stderr?.includes('No conversation found with session ID') ?? false) ||
+        (executionError?.message?.includes('exit status 1') && !completionDetected && stdoutChunkCount < 10)
+      )
+
+      if (isSessionResumeFailure && retryOptions) {
+        console.warn('[Claude Code Service] 🔄 Session resume failed — retrying without --continue', {
+          sessionId: request.sessionId,
+          stderr: execution?.stderr?.substring(0, 300),
+          exitCode: execution?.exitCode,
+        })
+
+        // Clear stale session ID from DB
+        try {
+          await db.update(projects)
+            .set({ conversationId: null, updatedAt: new Date() })
+            .where(eq(projects.id, request.projectId))
+          console.log('[Claude Code Service] Cleared stale session ID from DB')
+        } catch (dbError) {
+          console.error('[Claude Code Service] Failed to clear session ID:', dbError)
+        }
+
+        // Re-run the command without --continue (fresh session)
+        completionDetected = false
+        capturedSessionId = null
+        lineBuffer = ''
+        receivedAnyOutput = false
+        stdoutChunkCount = 0
+        stderrChunkCount = 0
+        execution = undefined
+        executionError = null
+
+        const retryCommand = retryOptions.command
+        console.log('[Claude Code Service] 🔄 Retrying with fresh session (no --continue)')
+
+        try {
+          const retryHandle = await sandbox.commands.run(
+            retryCommand,
+            {
+              background: true as const,
+              envs: retryOptions.envs,
+              timeoutMs: retryOptions.timeoutMs,
+              onStdout: (data: string) => {
+                stdoutChunkCount++
+                receivedAnyOutput = true
+                lineBuffer += data
+
+                // Same parsing logic as original — extract streaming messages
+                try {
+                  const lines = lineBuffer.split('\n')
+                  lineBuffer = lines.pop() || ''
+
+                  for (const line of lines) {
+                    const trimmedLine = line.trim()
+                    if (trimmedLine === 'CLAUDE_CODE_COMPLETE') {
+                      completionDetected = true
+                      continue
+                    }
+                    if (line.includes('"type":"system"') && line.includes('"session_id"')) {
+                      try {
+                        const jsonMatch = line.match(/Streaming:\s*(\{.+\})/)
+                        if (jsonMatch) {
+                          const parsed = JSON.parse(jsonMatch[1])
+                          if (parsed.session_id && !capturedSessionId) {
+                            capturedSessionId = parsed.session_id
+                            console.log('[Claude Code Service] Captured session ID (retry):', capturedSessionId)
+                          }
+                        }
+                      } catch (e) { /* ignore */ }
+                    }
+                    if (line.includes('"type":"result"') && line.includes('"session_id"')) {
+                      try {
+                        const jsonMatch = line.match(/Streaming:\s*(\{.+\})/)
+                        if (jsonMatch) {
+                          const parsed = JSON.parse(jsonMatch[1])
+                          if (parsed.session_id && !capturedSessionId) {
+                            capturedSessionId = parsed.session_id
+                          }
+                        }
+                      } catch (e) { /* ignore */ }
+                    }
+                    if (trimmedLine && line.includes('Streaming:')) {
+                      const messageMatch = line.match(/Streaming:\s*(.+)/)
+                      if (messageMatch && messageMatch[1]) {
+                        const messageContent = messageMatch[1].trim()
+                        if (!messageContent.includes('[Heartbeat')) {
+                          if (messageContent.includes('Task failed')) {
+                            console.error('[Claude Code Service] ❌ TASK FAILED (retry):', messageContent)
+                          }
+                          callbacks.onMessage(messageContent)
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  callbacks.onMessage(data)
+                  lineBuffer = ''
+                }
+              },
+              onStderr: (data: string) => {
+                stderrChunkCount++
+                receivedAnyOutput = true
+                console.log(`[Claude Code Service] ⚠️  stderr (retry):`, data)
+              },
+            }
+          )
+
+          execution = await retryHandle.wait()
+          console.log('[Claude Code Service] ✅ Retry completed', {
+            exitCode: execution?.exitCode,
+            stdoutChunkCount,
+            completionDetected,
+          })
+        } catch (retryError) {
+          executionError = retryError instanceof Error ? retryError : new Error(String(retryError))
+          console.error('[Claude Code Service] ❌ Retry also failed:', executionError.message)
+        }
+      }
+
       // Handle execution failure
       // Note: With spawn() we no longer hit the 120-second timeout issue that run() had
       if (executionError) {
-        console.error('[Claude Code Service] Execution error detected:', executionError.message)
-        callbacks.onError(executionError.message)
+        const isDeadlineExceeded = executionError.message.includes('deadline_exceeded') ||
+          executionError.message.includes('the operation timed out') ||
+          executionError.message.includes('timeoutMs')
+
+        console.error('[Claude Code Service] Execution error detected:', {
+          message: executionError.message,
+          isDeadlineExceeded,
+          receivedAnyOutput,
+          completionDetected,
+          stdoutChunkCount,
+        })
+
+        // If we received output (content was already streamed to frontend), don't treat
+        // transient E2B errors like "[unknown] terminated" or deadline timeouts as fatal —
+        // the agent likely finished or nearly finished. Treat as success with whatever we got.
+        // For deadline_exceeded specifically, even a single chunk of output means the agent
+        // was working — the E2B server just terminated the gRPC stream.
+        const canRecoverFromError = receivedAnyOutput && (
+          completionDetected ||
+          stdoutChunkCount > 5 ||
+          (isDeadlineExceeded && stdoutChunkCount > 0)
+        )
+
+        if (canRecoverFromError) {
+          console.log('[Claude Code Service] Execution error after receiving output — treating as completion', {
+            receivedAnyOutput,
+            completionDetected,
+            stdoutChunkCount,
+            isDeadlineExceeded,
+            error: executionError.message,
+          })
+          // Fall through to success path below
+        } else if (isDeadlineExceeded) {
+          // Provide a user-friendly message instead of the raw E2B SDK error
+          await callbacks.onError(
+            'The AI agent took too long to respond. This can happen with complex requests. ' +
+            'Please try again — the agent will resume from where it left off if you send the same message.'
+          )
+          return
+        } else {
+          await callbacks.onError(executionError.message)
+          return
+        }
+      }
+
+      if (!execution && !executionError) {
+        await callbacks.onError('Execution failed - no result returned from sandbox')
         return
       }
 
-      if (!execution) {
-        callbacks.onError('Execution failed - no result returned from sandbox')
-        return
-      }
-
-      const summary = this.extractSummary(execution)
+      const summary = execution ? this.extractSummary(execution) : 'Task completed'
 
       console.log('[Claude Code Service] after execution', {
         sandboxId: sandbox.sandboxId,
         duration: `${executionDuration}ms`,
-        exitCode: execution.exitCode,
+        exitCode: execution?.exitCode ?? 'N/A (error recovery)',
         completionDetected,
         sdkErrorsCount: sdkErrors.length,
-        stdoutLength: execution.stdout?.length || 0,
-        stderrLength: execution.stderr?.length || 0,
+        stdoutLength: execution?.stdout?.length || 0,
+        stderrLength: execution?.stderr?.length || 0,
       })
 
       // Log execution details for debugging
-      if (execution.exitCode === 0 && !completionDetected) {
+      if (execution?.exitCode === 0 && !completionDetected) {
         console.warn('[Claude Code Service] Execution completed with exit 0 but no completion signal detected')
-        console.log('[Claude Code Service] Last 500 chars of stdout:', execution.stdout?.slice(-500) || 'No stdout')
+        console.log('[Claude Code Service] Last 500 chars of stdout:', execution?.stdout?.slice(-500) || 'No stdout')
       }
 
       // Only send SDK errors to user if task completed and there were actual SDK errors
@@ -489,6 +735,7 @@ export class ClaudeCodeService {
             timestamp: new Date().toISOString(),
             projectId: request.projectId,
             type: 'sdk-error',
+            source: 'claude-sdk',
           })
           console.log(`[Claude Code Service] SDK error notification sent to channel: ${channelName}`)
         } catch (pusherError) {
@@ -496,10 +743,42 @@ export class ClaudeCodeService {
         }
       }
 
+      // Send Expo/Metro build errors if any were captured during agent execution
+      if (expoErrors.length > 0) {
+        console.log('[Claude Code Service] Sending Expo build errors to frontend:', expoErrors.length)
+        try {
+          const channelName = `${request.projectId}-errors`
+          pusherServer.trigger(channelName, 'error-notification', {
+            message: expoErrors.join('\n'),
+            timestamp: new Date().toISOString(),
+            projectId: request.projectId,
+            type: 'runtime-error',
+            source: 'expo-server',
+          })
+          console.log(`[Claude Code Service] Expo error notification sent to channel: ${channelName}`)
+        } catch (pusherError) {
+          console.error('[Claude Code Service] Failed to send Expo error notification:', pusherError)
+        }
+      }
+
       // Consider it successful if we got the completion signal OR exit code is 0
-      if (execution.exitCode !== 0 && !completionDetected) {
+      // If execution is null (error recovery path), skip this check — we already validated above
+      if (execution && execution.exitCode !== 0 && !completionDetected) {
         const errorMessage = `Claude Code execution failed with exit code ${execution.exitCode}: ${execution.stderr}`
         console.error('[Claude Code Service] Execution failed:', errorMessage)
+
+        // Clear the session ID so the next message starts a fresh session
+        // instead of repeatedly failing to resume a broken session
+        if (request.sessionId) {
+          try {
+            console.log('[Claude Code Service] Clearing stale session ID after failure')
+            await db.update(projects)
+              .set({ conversationId: null, updatedAt: new Date() })
+              .where(eq(projects.id, request.projectId))
+          } catch (dbError) {
+            console.error('[Claude Code Service] Failed to clear session ID:', dbError)
+          }
+        }
 
         // Trigger GitHub commit for failed execution (fire and forget)
         this.triggerGitHubCommit(
@@ -510,7 +789,7 @@ export class ClaudeCodeService {
           true, // executionFailed = true
         )
 
-        callbacks.onError(errorMessage)
+        await callbacks.onError(errorMessage)
         return
       }
 
@@ -530,8 +809,8 @@ export class ClaudeCodeService {
       })
 
       // Always call onComplete to properly close the stream FIRST
-      // This ensures the client receives the completion message immediately
-      callbacks.onComplete(response)
+      // Await to ensure async callbacks (DB saves, usage tracking) complete before returning
+      await callbacks.onComplete(response)
 
       // Trigger GitHub commit for successful execution (fire and forget)
       this.triggerGitHubCommit(
@@ -613,7 +892,7 @@ export class ClaudeCodeService {
         console.error('[Claude Code Service] Failed to send Pusher error notification:', pusherError)
       }
 
-      callbacks.onError(
+      await callbacks.onError(
         error instanceof Error ? error.message : 'Unknown error',
       )
     }

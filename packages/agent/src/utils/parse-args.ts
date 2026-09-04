@@ -13,6 +13,7 @@ export function parseArgs(argv: string[]): ExecutorArgs {
   const cwdArg = args.find((arg) => arg.startsWith('--cwd='))
   const modelArg = args.find((arg) => arg.startsWith('--model='))
   const imageUrlsArg = args.find((arg) => arg.startsWith('--image-urls='))
+  const continueArg = args.find((arg) => arg.startsWith('--continue='))
 
   if (!promptArg) {
     throw new Error('--prompt argument is required')
@@ -54,11 +55,15 @@ export function parseArgs(argv: string[]): ExecutorArgs {
     }
   }
 
+  // Parse session ID for conversation resumption
+  const sessionId = continueArg?.substring('--continue='.length) || undefined
+
   return {
     prompt,
     systemPrompt,
     cwd,
     model,
     imageUrls,
+    sessionId,
   }
 }

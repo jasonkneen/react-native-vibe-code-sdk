@@ -2,6 +2,7 @@ import { db, projects, eq, and } from '@/lib/db'
 import { startExpoServer } from '@/lib/server-utils'
 import { NextRequest } from 'next/server'
 import { connectWithRecovery } from '@/lib/sandbox-recovery'
+import { tunnelMode as tunnelModeFlag } from '@/flags'
 
 export const maxDuration = 120
 
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
     const isExpoTemplate =
       project.template === 'react-native-expo' ||
       project.template === 'expo' ||
+      project.template === 'expo-testing' ||
       project.template === 'tamagui'
 
     if (isExpoTemplate || !expoRunning) {
@@ -103,7 +105,8 @@ export async function POST(req: NextRequest) {
         console.log(
           `[Restart Server] Starting Expo server (template=${project.template}, expoRunning=${expoRunning})...`,
         )
-        const serverResult = await startExpoServer(sandbox, project.id)
+        const currentTunnelMode = await tunnelModeFlag()
+        const serverResult = await startExpoServer(sandbox, project.id, undefined, currentTunnelMode as any)
 
         return Response.json({
           success: true,
@@ -116,6 +119,7 @@ export async function POST(req: NextRequest) {
           restarted: true,
           wasRecreated,
           ...(wasRecreated ? { newSandboxId: sandbox.sandboxId } : {}),
+          tunnelMode: currentTunnelMode,
         })
       } catch (expoError) {
         console.error('[Restart Server] Error starting Expo server:', expoError)

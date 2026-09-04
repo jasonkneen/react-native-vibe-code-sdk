@@ -2,10 +2,13 @@ import { db, projects, eq } from '@react-native-vibe-code/database'
 import { Sandbox } from '@e2b/code-interpreter'
 import { detectAndNotifyRuntimeError } from '@react-native-vibe-code/error-manager/server'
 
+export type TunnelMode = 'ngrok-patch' | 'lan'
+
 export async function startExpoServer(
   sandbox: Sandbox,
   projectId?: string,
   customNgrokUrl?: string,
+  tunnelMode: TunnelMode = 'ngrok-patch',
 ): Promise<{ url: string; serverReady: boolean; ngrokUrl?: string }> {
   console.log('[Server Utils] Starting Expo web server...')
   console.log('[Server Utils] ProjectId for error notifications:', projectId || 'NOT PROVIDED')
@@ -18,7 +21,7 @@ export async function startExpoServer(
   console.log('[Server Utils] sandboxId', sandbox.sandboxId)
   // Only build an ngrok URL if NGROK_AUTHTOKEN is actually configured
   const useNgrokToken = !!process.env.NGROK_AUTHTOKEN || !!customNgrokUrl
-  const ngrokDomain = useNgrokToken ? (customNgrokUrl || sandbox.sandboxId) : null
+  const ngrokDomain = useNgrokToken ? (customNgrokUrl || projectId || sandbox.sandboxId) : null
   const ngrokUrl = ngrokDomain ? `https://${ngrokDomain}.ngrok.dev` : undefined
 
   console.log('[Server Utils] Ngrok enabled:', useNgrokToken)
@@ -68,19 +71,23 @@ export async function startExpoServer(
           healthCheck.stdout.includes('200') ||
           healthCheck.stdout.includes('404')
         ) {
-          console.log(`[Server Utils] ✅ Healthy server detected on port ${port}, will still restart to reconnect ngrok`)
-
-          // Even if server is healthy, kill it to restart with fresh ngrok connection
-          console.log(`[Server Utils] Killing existing server to restart with new ngrok connection...`)
-          try {
-            await sandbox.commands.run(
-              `lsof -ti:${port} | xargs kill -9 || true`,
-              { timeoutMs: 10000 },
-            )
-            console.log('[Server Utils] Existing server killed, waiting for port to be freed...')
-            await new Promise((resolve) => setTimeout(resolve, 2000))
-          } catch (killError) {
-            console.log('[Server Utils] Failed to kill existing server:', killError)
+          if (tunnelMode === 'lan') {
+            // In LAN mode, leave the healthy Expo server running — only ngrok needs restarting
+            console.log(`[Server Utils] ✅ Healthy server detected on port ${port}, keeping it running (LAN mode)`)
+          } else {
+            // In ngrok-patch mode, kill and restart to reconnect ngrok
+            console.log(`[Server Utils] ✅ Healthy server detected on port ${port}, will still restart to reconnect ngrok`)
+            console.log(`[Server Utils] Killing existing server to restart with new ngrok connection...`)
+            try {
+              await sandbox.commands.run(
+                `lsof -ti:${port} | xargs kill -9 || true`,
+                { timeoutMs: 10000 },
+              )
+              console.log('[Server Utils] Existing server killed, waiting for port to be freed...')
+              await new Promise((resolve) => setTimeout(resolve, 2000))
+            } catch (killError) {
+              console.log('[Server Utils] Failed to kill existing server:', killError)
+            }
           }
         } else {
           // Server is not responding - kill zombie process
@@ -175,6 +182,10 @@ export async function startExpoServer(
       envVars.set('EXPO_PUBLIC_API_BASE_URL', apiBaseUrl)
       console.log('[Server Utils] Set EXPO_PUBLIC_API_BASE_URL:', apiBaseUrl)
 
+      // Set EXPO_PUBLIC_SANDBOX_ID so the hover system can identify the sandbox
+      envVars.set('EXPO_PUBLIC_SANDBOX_ID', sandbox.sandboxId)
+      console.log('[Server Utils] Set EXPO_PUBLIC_SANDBOX_ID:', sandbox.sandboxId)
+
       // Convert map back to lines
       const newLines = Array.from(envVars.entries()).map(
         ([key, value]) => `${key}=${value}`
@@ -216,15 +227,29 @@ export async function startExpoServer(
     console.log('[Server Utils] Bun not found in PATH:', error)
   }
 
+  // Patch app.json web output to "static" if needed — apps with "output": "server"
+  // (SSR/RSC mode) can prevent expo start --web from serving on port 8081 in dev.
+  console.log('[Server Utils] Patching app.json web output to static if needed...')
+  try {
+    await sandbox.commands.run(
+      `node -e "try{const fs=require('fs'),p='/home/user/app/app.json',a=JSON.parse(fs.readFileSync(p,'utf8'));if(a.expo&&a.expo.web&&a.expo.web.output==='server'){a.expo.web.output='static';fs.writeFileSync(p,JSON.stringify(a,null,2));console.log('Patched to static');}else{console.log('No patch needed');}}catch(e){console.log('Skip patch:',e.message);}"`,
+      { timeoutMs: 5000 }
+    )
+  } catch (error) {
+    console.log('[Server Utils] app.json patch failed (non-fatal):', error)
+  }
+
   // Start the web server in background
-  // Build the command — only use ngrok tunnel if NGROK_AUTHTOKEN is configured
-  const useNgrok = useNgrokToken
-  const startCommand = useNgrok
-    ? `cd /home/user/app && CI=false bun install && bun run start -- --ngrokurl ${ngrokDomain} --tunnel --web`
-    : `cd /home/user/app && CI=false bun install && bun run start -- --web`
-  console.log('[Server Utils] Ngrok enabled:', useNgrok)
+  // Build the command based on tunnel mode
+  // In LAN mode, use `bunx expo start` directly to bypass the ngrok-patched start script
+  const startCommand = !useNgrokToken
+    ? `cd /home/user/app && CI=false bun install && bun run start -- --web`
+    : tunnelMode === 'lan'
+    ? `cd /home/user/app && CI=false bun install && EXPO_PACKAGER_PROXY_URL=${ngrokUrl} bunx expo start --lan --web`
+    : `cd /home/user/app && CI=false bun install && bun run start -- --ngrokurl ${ngrokDomain} --tunnel --web`
 
   console.log('[Server Utils] Starting with command:', startCommand)
+  console.log('[Server Utils] Tunnel mode:', tunnelMode)
 
   const webServerProcess = sandbox.commands
     .run(
@@ -321,6 +346,31 @@ export async function startExpoServer(
 
     if (!webBundled) {
       console.log(`[Server Utils] Still waiting for server... ${waitTime}ms elapsed`)
+    }
+  }
+
+  // In LAN mode, start ngrok as a separate background process after Expo is ready
+  if (tunnelMode === 'lan' && useNgrokToken && webBundled) {
+    console.log('[Server Utils] Starting ngrok as separate background process (LAN mode)...')
+    try {
+      const ngrokStartCmd = `ngrok http --url=${ngrokDomain}.ngrok.dev 8081`
+      console.log('[Server Utils] Running:', ngrokStartCmd)
+      sandbox.commands.run(ngrokStartCmd, {
+        background: true,
+        timeoutMs: 3600000,
+        onStdout: (data: string) => {
+          console.log('[Server Utils] NGROK STDOUT:', data)
+        },
+        onStderr: (data: string) => {
+          console.log('[Server Utils] NGROK STDERR:', data)
+        },
+      }).catch(err => console.log('[Server Utils] Ngrok process error:', err))
+
+      // Wait for ngrok to establish tunnel
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+      console.log('[Server Utils] Ngrok background process started')
+    } catch (error) {
+      console.log('[Server Utils] Failed to start ngrok background process:', error)
     }
   }
 

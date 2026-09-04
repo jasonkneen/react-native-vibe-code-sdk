@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
+import { extractExpoError, isExpoErrorPage } from '@react-native-vibe-code/error-manager/server'
 
 interface CheckNgrokHealthRequest {
   ngrokUrl: string
@@ -12,6 +13,7 @@ interface CheckNgrokHealthResponse {
   reason?: string
   tunnelStatus: 'connected' | 'disconnected' | 'unknown'
   serverStatus?: 'running' | 'stopped'
+  expoError?: string | null
 }
 
 // Error patterns that indicate ngrok tunnel is down
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
 
     let tunnelStatus: 'connected' | 'disconnected' | 'unknown' = 'unknown'
     let serverStatus: 'running' | 'stopped' | undefined = undefined
+    let expoError: string | null = null
 
     // Step 1: Check if the ngrok URL is responding
     try {
@@ -69,6 +72,18 @@ export async function POST(request: Request) {
       console.log('[check-ngrok-health] Response status:', response.status)
       console.log('[check-ngrok-health] Response preview:', text.substring(0, 300))
 
+      // Check for Expo error page using the error-manager package
+      if (isExpoErrorPage(text)) {
+        console.log('[check-ngrok-health] ⚠️ Expo error page detected — tunnel connected but app has errors')
+        tunnelStatus = 'connected'
+
+        expoError = extractExpoError(text)
+        if (!expoError) {
+          expoError = 'Expo build error detected — check the preview for details'
+        }
+        console.log('[check-ngrok-health] Extracted Expo error:', expoError.substring(0, 150))
+      }
+
       // Check for ngrok error patterns in the response
       const hasNgrokError = NGROK_ERROR_PATTERNS.some(pattern =>
         text.toLowerCase().includes(pattern.toLowerCase())
@@ -78,11 +93,9 @@ export async function POST(request: Request) {
         console.log('[check-ngrok-health] ❌ Detected ngrok error pattern in response')
         tunnelStatus = 'disconnected'
       } else if (response.ok || response.status === 404) {
-        // 200 OK or 404 (Expo might return 404 for some routes) means tunnel is working
         console.log('[check-ngrok-health] ✅ Ngrok tunnel is connected')
         tunnelStatus = 'connected'
-      } else if (response.status >= 500) {
-        // 5xx errors typically indicate tunnel issues
+      } else if (response.status >= 500 && !expoError) {
         console.log('[check-ngrok-health] ❌ Server error, tunnel may be down')
         tunnelStatus = 'disconnected'
       } else {
@@ -102,9 +115,8 @@ export async function POST(request: Request) {
     if (tunnelStatus === 'disconnected') {
       try {
         console.log('[check-ngrok-health] Checking if server is still running in sandbox...')
-        const sandbox = await Sandbox.connect(sandboxId)
+        const sandbox = await connectSandbox(sandboxId)
 
-        // Check if the port is listening
         const checkPortCmd = `ss -tuln 2>/dev/null | grep -q :${checkPort} && echo "LISTENING" || echo "NOT_LISTENING"`
         const result = await sandbox.commands.run(checkPortCmd, { timeoutMs: 3000 })
 
@@ -117,7 +129,6 @@ export async function POST(request: Request) {
         serverStatus = undefined
       }
     } else {
-      // Tunnel is connected, so server must be running
       serverStatus = 'running'
     }
 
@@ -129,6 +140,7 @@ export async function POST(request: Request) {
       isAlive,
       tunnelStatus,
       serverStatus,
+      expoError,
       reason: !isAlive ? 'Ngrok tunnel is disconnected' : undefined,
     })
   } catch (error) {

@@ -44,9 +44,13 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "type-check": "tsc --noEmit",
-    "build:sandbox:expo": "e2b template build --config templates/expo-template/e2b.toml --name 'capsule-expo-sandbox'",
+    "copy:executor": "mkdir -p templates/shared && cp ../agent/dist/standalone.mjs templates/shared/executor.mjs",
+    "build:sandbox:expo": "pnpm copy:executor && e2b template build --config templates/expo-template/e2b.toml --name 'capsule-expo-sandbox'",
     "build:sandbox:tamagui": "e2b template build --config templates/tamagui-template/e2b.toml --name 'capsule-tamagui-sandbox'",
-    "build:sandbox:github": "e2b template build --config templates/github-template/e2b.toml --name 'capsule-github-sandbox'"
+    "build:sandbox:github": "pnpm copy:executor && e2b template build --config templates/github-template/e2b.toml --name 'capsule-github-sandbox'",
+    "build:sandbox:expo-testing": "pnpm copy:executor && e2b template build --config templates/expo-template/e2b-testing.toml --name 'expo-testing'",
+    "build:sandbox:creative-suite": "pnpm copy:executor && npx tsx templates/creative-suite-template/build.prod.ts",
+    "build:sandbox:creative-suite:dev": "pnpm copy:executor && npx tsx templates/creative-suite-template/build.dev.ts"
   },
   "publishConfig": {
     "access": "public"

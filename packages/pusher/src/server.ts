@@ -25,15 +25,11 @@ export function getPusherServer(): Pusher {
   return pusherServerInstance
 }
 
-// Legacy export for backward compatibility
-export const pusherServer = {
-  get instance() {
-    return getPusherServer()
+// Lazy proxy that delegates all property access to the Pusher instance
+export const pusherServer: Pusher = new Proxy({} as Pusher, {
+  get(_, prop) {
+    const instance = getPusherServer()
+    const value = (instance as any)[prop]
+    return typeof value === 'function' ? value.bind(instance) : value
   },
-  trigger(...args: Parameters<Pusher['trigger']>) {
-    return getPusherServer().trigger(...args)
-  },
-  authorizeChannel(...args: Parameters<Pusher['authorizeChannel']>) {
-    return getPusherServer().authorizeChannel(...args)
-  },
-}
+})

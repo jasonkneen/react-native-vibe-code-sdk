@@ -41,6 +41,7 @@ interface MobileBurgerMenuProps {
   onOpenSubscriptionModal: () => void
   onOpenUserSettingsModal: () => void
   onOpenProjectSettingsModal: () => void
+  onOpenPublishOptions: () => void
   onSignOut?: () => void
   onClose: () => void
 }
@@ -56,6 +57,7 @@ export function MobileBurgerMenu({
   onOpenSubscriptionModal,
   onOpenUserSettingsModal,
   onOpenProjectSettingsModal,
+  onOpenPublishOptions,
   onSignOut,
   onClose,
 }: MobileBurgerMenuProps) {
@@ -211,8 +213,7 @@ export function MobileBurgerMenu({
 
         <button
           onClick={() => {
-            // Open publish flow - this will need to open a modal or navigate
-            toast.info('Opening publish options...')
+            onOpenPublishOptions()
             onClose()
           }}
           disabled={!projectId || !sandboxId || !session?.user?.id}
@@ -250,7 +251,7 @@ export function MobileBurgerMenu({
 
           <button
             onClick={() => {
-              window.open("https://x.com/capsulethis", "_blank")
+              window.open("https://x.com/rnvibecode", "_blank")
               onClose()
             }}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors hover:bg-accent/50"

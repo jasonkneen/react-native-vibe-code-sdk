@@ -55,7 +55,8 @@ describe('getPromptWithCloudStatus', () => {
   it('cloud result = base prompt + separator + convex guidelines', () => {
     const withCloud = getPromptWithCloudStatus(true)
     const withoutCloud = getPromptWithCloudStatus(false)
-    expect(withCloud).toBe(withoutCloud + '\n\n' + convexGuidelines)
+    expect(withCloud).toBe(prompt + '\n\n' + convexGuidelines)
+    expect(withCloud).not.toContain('<cloud_disabled>')
   })
 })
 
@@ -78,8 +79,9 @@ describe('prompt (direct export)', () => {
     expect(prompt).toContain('React Native')
   })
 
-  it('should match getPromptWithCloudStatus(false) result', () => {
-    expect(getPromptWithCloudStatus(false)).toBe(prompt)
+  it('should keep the base prompt and add explicit cloud-disabled guidance', () => {
+    expect(getPromptWithCloudStatus(false)).toContain(prompt)
+    expect(getPromptWithCloudStatus(false)).toContain('<cloud_disabled>')
   })
 })
 
@@ -107,7 +109,7 @@ describe('createSystemPrompt', () => {
 
   it('should use the default prod URL when none is provided', () => {
     const result = createSystemPrompt()
-    expect(result).toContain('capsulethis.com')
+    expect(result).toContain('reactnativevibecode.com')
   })
 
   it('should produce the same output as `prompt` when called with no args', () => {

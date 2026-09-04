@@ -43,6 +43,9 @@ export function ChatInput({
   isAuthenticated = false,
   selectedModel,
   onModelChange,
+  agentType,
+  onAgentTypeChange,
+  opencodeEnabled,
   onSkillsChange,
   suggestionTip,
 }: {
@@ -63,6 +66,9 @@ export function ChatInput({
   isAuthenticated?: boolean
   selectedModel: string
   onModelChange: (modelId: string) => void
+  agentType?: 'claude-code' | 'opencode' | 'kimi-k2'
+  onAgentTypeChange?: (agentType: 'claude-code' | 'opencode' | 'kimi-k2') => void
+  opencodeEnabled?: boolean
   onSkillsChange?: (skills: AISkill[]) => void
   suggestionTip?: string
 }) {
@@ -76,6 +82,16 @@ export function ChatInput({
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [selectedSkills, setSelectedSkills] = useState<AISkill[]>([])
   const [editorWidth, setEditorWidth] = useState<number>(0)
+
+  // Sync external input changes (e.g. from query params) into the TipTap editor
+  useEffect(() => {
+    if (input && editorRef.current) {
+      const currentText = editorRef.current.getPlainText?.() || ''
+      if (!currentText.trim() && input.trim()) {
+        editorRef.current.setContent(input)
+      }
+    }
+  }, [input])
 
   // Audio recorder for Whisper transcription
   const audioRecorder = useAudioRecorder()
@@ -406,7 +422,7 @@ export function ChatInput({
               onContentChange={handleEditorContentChange}
               onSubmit={handleEditorSubmit}
               disableEnterSubmit={true}
-              className="min-h-[3rem] w-full relative z-10"
+              className="min-h-[6rem] md:min-h-[3rem] w-full relative z-10"
             />
           </div>
           <div className="flex p-3 gap-2 items-center justify-between">
@@ -451,6 +467,9 @@ export function ChatInput({
                 onChange={onModelChange}
                 disabled={isLoading || isErrored}
                 compact
+                agentType={agentType}
+                onAgentTypeChange={onAgentTypeChange}
+                opencodeEnabled={opencodeEnabled}
               />
             </div>
 

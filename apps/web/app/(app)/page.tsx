@@ -1,18 +1,18 @@
 import { getServerSession } from '@/lib/auth/index'
 import { HomeClient } from '@/components/home-client'
-import { LandingFeaturesToggle } from '@/components/landing-features-toggle'
+import { opencodeEnabled } from '@/flags'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   const session = await getServerSession()
+  const showOpencode = await opencodeEnabled()
 
   return (
     <main className="flex flex-col min-h-dvh">
       <div className="md:h-dvh flex">
-        <HomeClient initialSession={session} />
+        <HomeClient initialSession={session} opencodeEnabled={!!showOpencode} />
       </div>
-      <LandingFeaturesToggle />
     </main>
   )
 }

@@ -24,6 +24,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { customAlphabet } from 'nanoid'
+import posthog from 'posthog-js'
 
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 7)
 
@@ -32,8 +33,10 @@ interface ProjectHeaderActionsProps {
   projectId?: string
   projectTitle?: string
   sandboxId?: string
+  isSandboxRecovering?: boolean
   currentProject?: Project | null
   onProjectUpdate?: (project: Project) => void
+  onOpenAppStoreSubmissions?: () => void
 }
 
 export function ProjectHeaderActions({
@@ -41,8 +44,10 @@ export function ProjectHeaderActions({
   projectId,
   projectTitle,
   sandboxId,
+  isSandboxRecovering = false,
   currentProject: externalCurrentProject,
   onProjectUpdate,
+  onOpenAppStoreSubmissions,
 }: ProjectHeaderActionsProps) {
   const [mounted, setMounted] = useState(false)
   const [deployedUrl, setDeployedUrl] = useState('')
@@ -241,7 +246,7 @@ export function ProjectHeaderActions({
           onProjectUpdate?.(updatedProject)
         }
         if (currentProject?.cloudflareProjectName || currentProject?.deployedUrl || deployedUrl) {
-          setDeployedUrl(`https://${trimmedDomain}.capsulethis.app`)
+          setDeployedUrl(`https://${trimmedDomain}.pages.dev`)
         }
       } else {
         const error = await response.json()
@@ -257,7 +262,7 @@ export function ProjectHeaderActions({
 
   const handleCopyDomainUrl = async () => {
     const domain = customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')
-    const url = `https://${domain}.capsulethis.app`
+    const url = `https://${domain}.pages.dev`
 
     try {
       await navigator.clipboard.writeText(url)
@@ -286,6 +291,10 @@ export function ProjectHeaderActions({
     }
 
     const isUpdate = !!(currentProject?.cloudflareProjectName || currentProject?.deployedUrl)
+    posthog.capture('publish_to_web_clicked', {
+      project_id: projectId,
+      is_update: isUpdate,
+    })
     setIsDeploying(true)
     try {
       toast.info(isUpdate ? 'Starting update...' : 'Starting deployment...')
@@ -362,6 +371,7 @@ export function ProjectHeaderActions({
   }
 
   const handleCopyRemixUrl = async () => {
+    posthog.capture('remix_clicked', { project_id: projectId })
     const url = getRemixUrl()
     if (!url) return
 
@@ -376,6 +386,7 @@ export function ProjectHeaderActions({
   }
 
   const handleDownload = async () => {
+    posthog.capture('download_clicked', { project_id: projectId })
     if (!projectId || !session?.user?.id) {
       console.error('[Download] Missing projectId or session')
       toast.error('Unable to download project')
@@ -419,7 +430,7 @@ export function ProjectHeaderActions({
           variant="ghost"
           className="p-2 px-4"
           onClick={handleDownload}
-          disabled={!projectId || !session?.user?.id}
+          disabled={!projectId || !session?.user?.id || isSandboxRecovering}
         >
           <Download className="h-4 w-4 mr-2" />
           <span className="hidden sm:inline">Download</span>
@@ -433,7 +444,7 @@ export function ProjectHeaderActions({
             <Button
               variant="ghost"
               className="p-2 px-4"
-              disabled={!projectId || !sandboxId || !session?.user?.id}
+              disabled={!projectId || !sandboxId || !session?.user?.id || isSandboxRecovering}
             >
               <Rocket className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Publish</span>
@@ -467,7 +478,7 @@ export function ProjectHeaderActions({
                           placeholder="your-app-name"
                           autoFocus
                         />
-                        <span className="pr-3 text-sm text-muted-foreground whitespace-nowrap">.capsulethis.app</span>
+                        <span className="pr-3 text-sm text-muted-foreground whitespace-nowrap">.pages.dev</span>
                       </div>
                       <div className="flex items-center shrink-0 w-5">
                         {isCheckingDomain && (
@@ -519,7 +530,7 @@ export function ProjectHeaderActions({
                 ) : (
                   <>
                     <div className="flex-1 bg-muted rounded-md px-3 py-2 text-sm truncate font-mono">
-                      {customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')}.capsulethis.app
+                      {customDomain || currentProject?.cloudflareProjectName || generateSlug(projectTitle || 'my-app')}.pages.dev
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -561,8 +572,34 @@ export function ProjectHeaderActions({
                 <Rocket className="h-4 w-4 mr-2" />
                 {isDeploying
                   ? ((currentProject?.cloudflareProjectName || currentProject?.deployedUrl) ? 'Updating...' : 'Publishing...')
-                  : ((currentProject?.cloudflareProjectName || currentProject?.deployedUrl) ? 'Update App' : 'Publish App')}
+                  : ((currentProject?.cloudflareProjectName || currentProject?.deployedUrl) ? 'Update on Web' : 'Publish to Web')}
               </Button>
+
+              {/* App Stores section */}
+              <div className="border-t pt-3">
+                <h4 className="font-semibold text-sm mb-2">App Stores</h4>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    posthog.capture('app_store_clicked', { project_id: projectId })
+                    onOpenAppStoreSubmissions?.()
+                  }}
+                  disabled={!onOpenAppStoreSubmissions}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="h-4 w-4 mr-2"
+                  >
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                  </svg>
+                  App Store
+                </Button>
+              </div>
             </div>
           </HoverCardContent>
         </HoverCard>

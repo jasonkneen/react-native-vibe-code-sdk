@@ -26,6 +26,7 @@ interface MobileHeaderProps {
   onOpenSubscriptionModal: () => void
   onOpenUserSettingsModal: () => void
   onOpenProjectSettingsModal: () => void
+  onOpenPublishOptions: () => void
   onSignOut?: () => void
 }
 
@@ -40,6 +41,7 @@ export function MobileHeader({
   onOpenSubscriptionModal,
   onOpenUserSettingsModal,
   onOpenProjectSettingsModal,
+  onOpenPublishOptions,
   onSignOut,
 }: MobileHeaderProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -78,6 +80,7 @@ export function MobileHeader({
             onOpenSubscriptionModal={onOpenSubscriptionModal}
             onOpenUserSettingsModal={onOpenUserSettingsModal}
             onOpenProjectSettingsModal={onOpenProjectSettingsModal}
+            onOpenPublishOptions={onOpenPublishOptions}
             onSignOut={onSignOut}
             onClose={() => setIsOpen(false)}
           />

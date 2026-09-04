@@ -1,4 +1,5 @@
 import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
 import { db, projects, eq, and } from '@/lib/db'
 import { startExpoServer } from '@/lib/server-utils'
 
@@ -42,7 +43,7 @@ export async function connectWithRecovery(
 ): Promise<SandboxRecoveryResult> {
   // ── 1. Happy path: sandbox is still alive ──────────────────────────────
   try {
-    const sandbox = await Sandbox.connect(sandboxId)
+    const sandbox = await connectSandbox(sandboxId)
     console.log(`[SandboxRecovery] Connected to existing sandbox: ${sandbox.sandboxId}`)
     return { sandbox, wasRecreated: false }
   } catch (connectError) {

@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { downloadImage } from './utils/download-image.js'
 import { loadEnvFile } from './utils/env-loader.js'
+import { slimifyMessage } from './slim-message.js'
 import type { ExecutorArgs, ExecutorConfig, ExecutorHooks, ExecutorResult } from './types.js'
 
 const DEFAULT_CONFIG: Required<ExecutorConfig> = {
@@ -50,6 +51,23 @@ export async function runExecutor(
   }
 
   const messages: SDKMessage[] = []
+
+  // Suppress unhandled rejections from the Claude Agent SDK during session resume.
+  // When resume fails with "No conversation found", the SDK yields an error result
+  // AND throws an unhandled promise rejection from its internal readMessages() function.
+  // This rejection bypasses try/catch and crashes the process before retry logic can run.
+  let suppressedResumeError = false
+  const rejectHandler = (reason: any) => {
+    const msg = reason instanceof Error ? reason.message : String(reason)
+    if (msg.includes('No conversation found') || msg.includes('error result')) {
+      console.warn('Suppressed SDK unhandled rejection during resume:', msg)
+      suppressedResumeError = true
+      return // Suppress — retry logic will handle this
+    }
+    // Re-throw non-resume errors
+    throw reason
+  }
+  process.on('unhandledRejection', rejectHandler)
 
   // Heartbeat to keep connection alive during long operations
   const heartbeatInterval = setInterval(() => {
@@ -112,41 +130,135 @@ export async function runExecutor(
     }
 
     // Build hooks configuration
-    const hooksConfig: Record<string, Array<{ hooks: Array<(input: { hook_event_name: string; cwd: string }, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<{ continue: boolean }>> }>> = {}
+    const hooksConfig: Record<string, Array<{ matcher?: string; hooks: Array<(input: { hook_event_name: string; cwd: string }, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<{ continue: boolean }>> }>> = {}
 
     if (hooks?.onSessionEnd && hooks.onSessionEnd.length > 0) {
       hooksConfig['SessionEnd'] = [{ hooks: hooks.onSessionEnd }]
     }
 
-    for await (const message of query({
-      prompt: finalPrompt,
-      options: {
-        cwd,
-        permissionMode: 'bypassPermissions',
-        // Load skills from filesystem - required for Agent Skills to work
-        settingSources: ['user', 'project'],
-        // Enable file manipulation tools plus Skill for user-defined skills
-        // allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'Skill'],
-        // Pass model selection if provided
-        ...(args.model && { model: args.model }),
-        // Add hooks if configured
-        ...(Object.keys(hooksConfig).length > 0 && { hooks: hooksConfig }),
-      } as any,
-    })) {
-      messages.push(message)
+    if (hooks?.onPostToolUse && hooks.onPostToolUse.length > 0) {
+      hooksConfig['PostToolUse'] = [{ matcher: 'Write|Edit', hooks: hooks.onPostToolUse }]
+    }
 
-      // Stream ALL messages to ensure UI updates properly
-      console.log(`Streaming: ${JSON.stringify(message)}`)
+    // Build system prompt option
+    const systemPromptOption = args.systemPrompt
+      ? {
+          type: 'preset' as const,
+          preset: 'claude_code' as const,
+          append: args.systemPrompt,
+        }
+      : undefined
 
-      // Also stream completion status separately for easier detection
-      if (message.type === 'result') {
-        if (message.subtype === 'success') {
-          console.log(`Streaming: Task completed successfully`)
-          console.log(`Streaming: Cost: $${message.total_cost_usd.toFixed(4)}, Duration: ${(message.duration_ms / 1000).toFixed(2)}s`)
+    if (args.systemPrompt) {
+      console.log('System prompt loaded, length:', args.systemPrompt.length)
+    } else {
+      console.log('WARNING: No system prompt provided — agent will use default behavior')
+    }
+
+    if (args.sessionId) {
+      console.log('Resuming session:', args.sessionId)
+    }
+
+    // Build base query options (without resume) so we can retry without it
+    const baseOptions: any = {
+      cwd,
+      permissionMode: 'bypassPermissions',
+      // Load skills from filesystem - required for Agent Skills to work
+      settingSources: ['user', 'project'],
+      // Pass system prompt so agent knows it's a React Native/Expo builder
+      ...(systemPromptOption && { systemPrompt: systemPromptOption }),
+      // Pass model selection if provided
+      ...(args.model && { model: args.model }),
+      // Add hooks if configured
+      ...(Object.keys(hooksConfig).length > 0 && { hooks: hooksConfig }),
+    }
+
+    // Try with resume first, fall back to fresh session if resume fails
+    let useResume = !!args.sessionId
+    let taskFailed = false
+
+    const runQuery = async (withResume: boolean) => {
+      const options = withResume
+        ? { ...baseOptions, resume: args.sessionId }
+        : baseOptions
+
+      for await (const message of query({
+        prompt: finalPrompt,
+        options,
+      })) {
+        messages.push(message)
+
+        // Also stream completion status separately for easier detection
+        if (message.type === 'result') {
+          if (message.subtype === 'success') {
+            // Stream slimified result and status
+            const slimMessages = slimifyMessage(message)
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`)
+            }
+            console.log(`Streaming: Task completed successfully`)
+            console.log(`Streaming: Cost: $${message.total_cost_usd.toFixed(4)}, Duration: ${(message.duration_ms / 1000).toFixed(2)}s`)
+          } else {
+            const errors = (message as any).errors || []
+            taskFailed = true
+
+            // When resuming, DON'T stream the error result to the frontend — we will
+            // retry with a fresh session. Streaming it would show a confusing "Task Failed"
+            // card before the retry succeeds.
+            if (withResume) {
+              console.warn('Task failed during resume — suppressing error result and breaking to retry')
+              console.warn('Resume failure details:', message.subtype, JSON.stringify(errors))
+              break
+            }
+
+            // Non-resume failure: stream the error to the frontend
+            const slimMessages = slimifyMessage(message)
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`)
+            }
+            console.log(`Streaming: Task failed: ${message.subtype}`)
+            console.log(`Streaming: Task failed errors: ${JSON.stringify(errors)}`)
+            console.log(`Streaming: Task failed stop_reason: ${(message as any).stop_reason}`)
+          }
         } else {
-          console.log(`Streaming: Task failed: ${message.subtype}`)
+          // Stream non-result messages normally (but skip during resume attempts
+          // since they'll just show a brief init before retry)
+          if (!withResume || message.type !== 'system') {
+            const slimMessages = slimifyMessage(message)
+            for (const slim of slimMessages) {
+              console.log(`Streaming: ${JSON.stringify(slim)}`)
+            }
+          }
         }
       }
+    }
+
+    try {
+      await runQuery(useResume)
+    } catch (resumeError) {
+      // If resume was used and it failed, retry without resume (fresh session)
+      if (useResume) {
+        console.warn('Resume failed, retrying without resume:', resumeError instanceof Error ? resumeError.message : String(resumeError))
+        console.log('Streaming: Session resume failed, starting fresh session...')
+        messages.length = 0 // Clear any partial messages
+        taskFailed = false
+        // Allow any pending SDK microtasks (unhandled rejections) to settle
+        await new Promise(resolve => setTimeout(resolve, 100))
+        await runQuery(false)
+      } else {
+        throw resumeError
+      }
+    }
+
+    // If task failed with resume (broke out of loop), retry without resume
+    if (taskFailed && useResume) {
+      console.warn('Task failed with resume, retrying without resume...')
+      console.log('Streaming: Retrying without session resume...')
+      messages.length = 0
+      taskFailed = false
+      // Allow any pending SDK microtasks (unhandled rejections) to settle
+      await new Promise(resolve => setTimeout(resolve, 100))
+      await runQuery(false)
     }
 
     console.log('Query completed successfully')
@@ -162,5 +274,6 @@ export async function runExecutor(
     return { success: false, messages, error: errorMessage }
   } finally {
     clearInterval(heartbeatInterval)
+    process.removeListener('unhandledRejection', rejectHandler)
   }
 }

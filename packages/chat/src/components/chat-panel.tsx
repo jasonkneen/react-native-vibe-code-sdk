@@ -43,6 +43,8 @@ export interface ChatPanelProps {
   isWaitingForFirstMessage?: boolean
   selectedModel: string
   onModelChange: (modelId: string) => void
+  agentType?: 'claude-code' | 'opencode' | 'kimi-k2'
+  onAgentTypeChange?: (agentType: 'claude-code' | 'opencode' | 'kimi-k2') => void
   imageAttachments?: ImageAttachment[]
   onImageAttachmentsChange?: (attachments: ImageAttachment[]) => void
   selectedSkills?: string[]
@@ -51,6 +53,8 @@ export interface ChatPanelProps {
   isCloudPanelOpen?: boolean
   onCloudPanelOpen?: () => void
   onCloudPanelClose?: () => void
+  /** Whether remote control (mobile) is currently editing */
+  isRemoteControlActive?: boolean
   /** Render function for messages container */
   renderMessages: (props: {
     messages: Message[]
@@ -76,6 +80,8 @@ export interface ChatPanelProps {
     latestSelection?: HoverSelectionData | null
     selectedModel: string
     onModelChange: (modelId: string) => void
+    agentType?: 'claude-code' | 'opencode' | 'kimi-k2'
+    onAgentTypeChange?: (agentType: 'claude-code' | 'opencode' | 'kimi-k2') => void
     imageAttachments?: ImageAttachment[]
     onImageAttachmentsChange?: (attachments: ImageAttachment[]) => void
     selectedSkills?: string[]
@@ -105,6 +111,8 @@ export function ChatPanel({
   isWaitingForFirstMessage,
   selectedModel,
   onModelChange,
+  agentType,
+  onAgentTypeChange,
   imageAttachments = [],
   onImageAttachmentsChange,
   selectedSkills = [],
@@ -113,6 +121,7 @@ export function ChatPanel({
   isCloudPanelOpen = false,
   onCloudPanelOpen,
   onCloudPanelClose,
+  isRemoteControlActive = false,
   renderMessages,
   renderInput,
   useHoverSelection,
@@ -183,7 +192,15 @@ export function ChatPanel({
   }, [projectId, sandboxId, userId])
 
   return (
-    <div className="flex flex-col border-r relative  overflow-hidden">
+    <div className="flex flex-col border-r relative overflow-hidden h-full flex-1 min-h-0">
+
+      {/* Remote Control overlay */}
+      {isRemoteControlActive && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground border-t-transparent mb-4" />
+          <p className="text-sm font-medium text-foreground">Remote Control is editing the app</p>
+        </div>
+      )}
 
       {/* Messages Container with Conversation (use-stick-to-bottom) */}
       {renderMessages({
@@ -211,6 +228,8 @@ export function ChatPanel({
         latestSelection,
         selectedModel,
         onModelChange,
+        agentType,
+        onAgentTypeChange,
         imageAttachments,
         onImageAttachmentsChange,
         selectedSkills,

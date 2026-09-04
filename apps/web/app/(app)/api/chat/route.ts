@@ -1,8 +1,12 @@
 import { saveProjectMessages } from '@/lib/db'
+import { db, projects, eq } from '@react-native-vibe-code/database'
 import { streamText, UIMessage } from 'ai'
 import { canUserSendMessage, incrementMessageUsage } from '@/lib/message-usage'
 import { corsHeaders, handleCorsOptions } from '@/lib/cors'
-import { handleClaudeCodeGeneration } from '@/lib/claude-code-handler'
+import { dispatchToAgent } from '@/lib/agent-dispatcher'
+import type { AgentType } from '@/lib/agent-dispatcher'
+import { getPusherServer } from '@react-native-vibe-code/pusher/server'
+import { canUserCreateSandbox } from '@react-native-vibe-code/byok'
 
 type ClaudeCodeResponse = {
   type: 'message' | 'completion' | 'error'
@@ -21,12 +25,16 @@ export async function POST(req: Request) {
   const {
     messages,
     projectId,
-    userId,
+    userId: bodyUserId,
     claudeModel,
     fileEdition,
     selectionData,
     imageAttachments,
     skills,
+    agentType,
+    source,
+    anthropicKey,
+    moonshotKey,
   }: {
     messages: UIMessage[]
     projectId: string
@@ -36,7 +44,29 @@ export async function POST(req: Request) {
     selectionData?: any
     imageAttachments?: Array<{ url: string; contentType: string; name: string; size: number }>
     skills?: string[]
+    agentType?: AgentType
+    source?: string
+    anthropicKey?: string
+    moonshotKey?: string
   } = await req.json()
+
+  // Mobile (remote-control) requests never include userId — they only send projectId + messages
+  const isRemoteControl = !bodyUserId
+
+  // If userId not provided (mobile app), look it up from the project
+  let userId = bodyUserId
+  let remoteSandboxId: string | null = null
+  if ((!userId || isRemoteControl) && projectId) {
+    const project = await db
+      .select({ userId: projects.userId, sandboxId: projects.sandboxId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1)
+    if (project.length > 0) {
+      if (!userId) userId = project[0].userId
+      remoteSandboxId = project[0].sandboxId ?? null
+    }
+  }
 
   // Get the last user message to send to claude-code
   const lastUserMessageObj = messages.filter((m: UIMessage) => m.role === 'user').pop()
@@ -58,6 +88,12 @@ export async function POST(req: Request) {
     finalImageAttachmentsCount: finalImageAttachments?.length || 0,
     skillsCount: skills?.length || 0,
     skills: skills,
+    source,
+    isRemoteControl,
+    remoteSandboxId,
+    hasByokKey: !!anthropicKey,
+    byokKeyPrefix: anthropicKey ? anthropicKey.substring(0, 10) + '...' : 'none',
+    byokKeyLength: anthropicKey?.length || 0,
   })
 
   console.log('[Chat Route] All messages:', messages.map(m => ({
@@ -72,8 +108,9 @@ export async function POST(req: Request) {
   console.log('[Chat Route] lastUserMessage:', lastUserMessage)
   console.log('[Chat Route] lastUserMessageId:', lastUserMessageId)
 
-  // Check message usage limits before processing
-  if (userId && lastUserMessage) {
+  // Check message usage limits before processing (skip for BYOK users)
+  const hasByokKey = !!anthropicKey || (agentType === 'kimi-k2' && !!moonshotKey)
+  if (userId && lastUserMessage && !hasByokKey) {
     console.log('[Chat Route] Checking message usage limits for user:', userId)
     const usageCheck = await canUserSendMessage(userId)
 
@@ -207,19 +244,80 @@ export async function POST(req: Request) {
     })
   }
 
-  // Increment message usage count before processing
-  console.log('[Chat Route] Incrementing message usage for user:', userId)
-  const usageResult = await incrementMessageUsage(userId)
+  // Check sandbox hours for BYOK users
+  if (hasByokKey && userId) {
+    const sandboxCheck = await canUserCreateSandbox(userId)
+    if (!sandboxCheck.canCreate) {
+      const sandboxLimitData = {
+        type: 'SANDBOX_LIMIT_EXCEEDED',
+        sessionsUsed: sandboxCheck.sessionsUsed,
+        sessionLimit: sandboxCheck.sessionLimit,
+      }
+      const sandboxLimitMessage = `__SANDBOX_LIMIT_CARD__${JSON.stringify(sandboxLimitData)}__SANDBOX_LIMIT_CARD__`
 
-  if (!usageResult.success) {
-    console.error('[Chat Route] Failed to increment message usage')
-    return new Response('Failed to track message usage', { status: 500 })
+      const result = await streamText({
+        model: {
+          specificationVersion: 'v1',
+          doStream: async () => {
+            const chunks = sandboxLimitMessage.split(' ')
+            let index = 0
+            return {
+              stream: new ReadableStream({
+                async start(controller) {
+                  const sendChunk = () => {
+                    if (index < chunks.length) {
+                      const chunk = chunks[index] + (index < chunks.length - 1 ? ' ' : '')
+                      controller.enqueue({ type: 'text-delta', textDelta: chunk })
+                      index++
+                      setTimeout(sendChunk, 50)
+                    } else {
+                      controller.enqueue({
+                        type: 'finish',
+                        finishReason: 'stop',
+                        usage: { promptTokens: 0, completionTokens: chunks.length, totalTokens: chunks.length },
+                      })
+                      controller.close()
+                    }
+                  }
+                  sendChunk()
+                },
+              }),
+            }
+          },
+        } as any,
+        messages: ([
+          ...messages,
+          { id: crypto.randomUUID(), role: 'assistant' as const, content: sandboxLimitMessage },
+        ] as any),
+      })
+      return result.toDataStreamResponse({
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Encoding': 'none',
+          ...corsHeaders,
+        },
+      })
+    }
   }
 
-  console.log('[Chat Route] Message usage incremented. New count:', usageResult.newUsageCount, 'Remaining:', usageResult.remainingMessages)
+  // Increment message usage count before processing (skip for BYOK users)
+  if (!hasByokKey) {
+    console.log('[Chat Route] Incrementing message usage for user:', userId)
+    const usageResult = await incrementMessageUsage(userId)
+
+    if (!usageResult.success) {
+      console.error('[Chat Route] Failed to increment message usage')
+      return new Response('Failed to track message usage', { status: 500 })
+    }
+
+    console.log('[Chat Route] Message usage incremented. New count:', usageResult.newUsageCount, 'Remaining:', usageResult.remainingMessages)
+  } else {
+    console.log('[Chat Route] BYOK user — skipping message usage increment')
+  }
 
   // Call claude-code handler directly to get the streaming response
   let claudeCodeResult: ClaudeCodeResponse | null = null
+  let messagesSavedToDb = false
 
   if (projectId && userId && lastUserMessage) {
     try {
@@ -298,20 +396,78 @@ export async function POST(req: Request) {
                     }
                   }
 
+                  // Helper to save messages to database - prevents loss on stream break
+                  const saveMessagesToDatabase = async (content: string, source: string) => {
+                    if (messagesSavedToDb) {
+                      console.log(`[Chat Route] saveMessagesToDatabase(${source}): already saved, skipping`)
+                      return
+                    }
+                    if (!projectId || !userId || !content) {
+                      console.log(`[Chat Route] saveMessagesToDatabase(${source}): missing projectId/userId/content, skipping`)
+                      return
+                    }
+                    messagesSavedToDb = true
+                    try {
+                      console.log(`[Chat Route] saveMessagesToDatabase(${source}): saving ${content.length} chars`)
+                      const assistantMessageId = crypto.randomUUID()
+                      const finalAssistantMessage: UIMessage = {
+                        id: assistantMessageId,
+                        role: 'assistant' as const,
+                        content,
+                        createdAt: new Date(),
+                        parts: [{ type: 'text', text: content }],
+                        metadata: claudeCodeResult ? { claudeCodeResult } : undefined,
+                      } as any
+
+                      const updatedMessages: UIMessage[] = [...messages, finalAssistantMessage]
+                      const messagesForDb = updatedMessages.map(msg => ({
+                        ...msg,
+                        createdAt: msg.createdAt
+                          ? (typeof msg.createdAt === 'string' ? new Date(msg.createdAt) : msg.createdAt)
+                          : new Date()
+                      }))
+
+                      await saveProjectMessages(projectId, userId, messagesForDb)
+                      console.log(`[Chat Route] saveMessagesToDatabase(${source}): saved successfully`)
+                    } catch (error) {
+                      console.error(`[Chat Route] saveMessagesToDatabase(${source}): failed:`, error)
+                      messagesSavedToDb = false // Allow retry from another path
+                    }
+                  }
+
                   // Heartbeat timer to detect stale streams
-                  const heartbeatInterval = setInterval(() => {
+                  const heartbeatInterval = setInterval(async () => {
                     const timeSinceActivity = Date.now() - lastActivityTime
                     // If no activity for 90 seconds, consider stream stale
                     if (timeSinceActivity > 90000 && !isStreamClosed && !isClosing && !hasReceivedCompletion) {
                       console.warn('[Chat Route] Stream appears stale, no activity for 90s')
                       clearInterval(heartbeatInterval)
+                      const timeoutContent = fullContent + '\n\n⚠️ Stream timeout - connection may have been interrupted'
+                      await saveMessagesToDatabase(timeoutContent, 'heartbeat-timeout')
                       safeCloseStream('length', '\n\n⚠️ Stream timeout - connection may have been interrupted')
                     }
                   }, 10000) // Check every 10 seconds
 
+                  // Notify desktop that remote control is editing
+                  console.log('[Chat Route] Remote control check:', { isRemoteControl, remoteSandboxId })
+                  if (isRemoteControl && remoteSandboxId) {
+                    try {
+                      console.log('[Chat Route] Triggering remote-control-start on channel:', `sandbox-${remoteSandboxId}`)
+                      const pusher = getPusherServer()
+                      await pusher.trigger(
+                        `sandbox-${remoteSandboxId}`,
+                        'remote-control-start',
+                        {}
+                      )
+                      console.log('[Chat Route] remote-control-start triggered successfully')
+                    } catch (e) {
+                      console.error('[Chat Route] Failed to trigger remote-control-start:', e)
+                    }
+                  }
+
                   try {
                     // Call the handler module directly - no HTTP, no timeout issues!
-                    await handleClaudeCodeGeneration(
+                    await dispatchToAgent(
                       {
                         userMessage: lastUserMessage,
                         messageId: lastUserMessageId,
@@ -323,6 +479,9 @@ export async function POST(req: Request) {
                         claudeModel,
                         imageAttachments: finalImageAttachments,
                         skills,
+                        agentType,
+                        anthropicKey,
+                        moonshotKey,
                       },
                       {
                         onMessage: (message: string) => {
@@ -338,7 +497,7 @@ export async function POST(req: Request) {
                             textDelta: content,
                           })
                         },
-                        onComplete: (result: any) => {
+                        onComplete: async (result: any) => {
                           clearInterval(heartbeatInterval)
                           hasReceivedCompletion = true
 
@@ -353,6 +512,23 @@ export async function POST(req: Request) {
                           const summaryContent = `\n\n✅ ${result.summary}`
                           fullContent += summaryContent
 
+                          // Save to DB BEFORE closing the stream
+                          await saveMessagesToDatabase(fullContent, 'onComplete')
+
+                          // Notify desktop that remote control is done
+                          if (isRemoteControl && remoteSandboxId) {
+                            try {
+                              const pusher = getPusherServer()
+                              await pusher.trigger(
+                                `sandbox-${remoteSandboxId}`,
+                                'remote-control-complete',
+                                {}
+                              )
+                            } catch (e) {
+                              console.error('[Chat Route] Failed to trigger remote-control-complete:', e)
+                            }
+                          }
+
                           // Use safe helpers for final message and close
                           safeEnqueue({
                             type: 'text-delta',
@@ -362,12 +538,29 @@ export async function POST(req: Request) {
 
                           console.log('[Chat Route] Stream completed successfully. Messages sent:', messageCount)
                         },
-                        onError: (error: string) => {
+                        onError: async (error: string) => {
                           clearInterval(heartbeatInterval)
                           console.error('[Chat Route] Handler error:', error)
 
                           const errorContent = `\n❌ Error: ${error}`
                           fullContent += errorContent
+
+                          // Save to DB BEFORE closing the stream
+                          await saveMessagesToDatabase(fullContent, 'onError')
+
+                          // Notify desktop that remote control is done (even on error)
+                          if (isRemoteControl && remoteSandboxId) {
+                            try {
+                              const pusher = getPusherServer()
+                              await pusher.trigger(
+                                `sandbox-${remoteSandboxId}`,
+                                'remote-control-complete',
+                                {}
+                              )
+                            } catch (e) {
+                              console.error('[Chat Route] Failed to trigger remote-control-complete on error:', e)
+                            }
+                          }
 
                           safeCloseStream('error', errorContent)
                         },
@@ -391,6 +584,11 @@ export async function POST(req: Request) {
                     clearInterval(heartbeatInterval)
 
                     const errorMessage = error instanceof Error ? error.message : 'Streaming error'
+                    const errorContent = fullContent + `\n❌ Error: ${errorMessage}`
+
+                    // Save to DB BEFORE closing the stream
+                    await saveMessagesToDatabase(errorContent, 'catch')
+
                     safeCloseStream('error', `\n❌ Error: ${errorMessage}`)
                   }
                 },
@@ -402,9 +600,9 @@ export async function POST(req: Request) {
         } as any,
         messages: (messages as any),
         onFinish: async ({ text }) => {
-          // Save messages to database when streaming finishes
-          if (projectId && userId) {
-            console.log('[Chat Route] onFinish called with text length:', text.length)
+          // Fallback: only save if no earlier path (onComplete/onError/catch) already saved
+          if (!messagesSavedToDb && projectId && userId) {
+            console.log('[Chat Route] onFinish fallback: saving messages (text length:', text.length, ')')
             try {
               const assistantMessageId = crypto.randomUUID()
               const finalAssistantMessage: UIMessage = {
@@ -416,14 +614,7 @@ export async function POST(req: Request) {
                 metadata: claudeCodeResult ? { claudeCodeResult } : undefined,
               } as any
 
-              console.log('[Chat Route] Created assistant message with ID:', assistantMessageId)
-
-              // The messages should already have annotations if they were sent with edit data
-              let updatedMessages: UIMessage[] = [...messages]
-
-              updatedMessages = [...updatedMessages, finalAssistantMessage]
-
-              // Convert createdAt to Date objects for database compatibility
+              const updatedMessages: UIMessage[] = [...messages, finalAssistantMessage]
               const messagesForDb = updatedMessages.map(msg => ({
                 ...msg,
                 createdAt: msg.createdAt
@@ -431,18 +622,14 @@ export async function POST(req: Request) {
                   : new Date()
               }))
 
-              console.log('[Chat Route] Saving messages to database:', {
-                projectId,
-                userId,
-                totalMessages: messagesForDb.length,
-                messageIds: messagesForDb.map(m => ({ id: m.id, role: m.role }))
-              })
-
               await saveProjectMessages(projectId, userId, messagesForDb)
-              console.log('[Chat Route] Messages saved successfully')
+              messagesSavedToDb = true
+              console.log('[Chat Route] onFinish fallback: messages saved successfully')
             } catch (error) {
-              console.error('[Chat Route] Failed to save messages:', error)
+              console.error('[Chat Route] onFinish fallback: failed to save messages:', error)
             }
+          } else {
+            console.log('[Chat Route] onFinish: messages already saved, skipping')
           }
         },
       })

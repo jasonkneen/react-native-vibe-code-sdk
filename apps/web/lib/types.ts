@@ -17,6 +17,7 @@ export type ExecutionResultWeb = ExecutionResultBase & {
   template: Exclude<TemplateId, 'code-interpreter-v1'>
   url: string
   ngrokUrl?: string
+  tunnelMode?: 'ngrok-patch' | 'lan'
   projectId?: string
   projectTitle?: string
   recreated?: boolean

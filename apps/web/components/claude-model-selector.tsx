@@ -1,5 +1,7 @@
 'use client'
 
+import { useState, useEffect, useRef } from 'react'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -7,8 +9,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL, getClaudeModelById } from '@/lib/claude-models'
-import { Cpu } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  getClaudeModelById,
+  getModelsForAgent,
+  getDefaultModelForAgent,
+  resolveModelForAgent,
+  type AgentType,
+} from '@/lib/claude-models'
+import { Settings2, Bot, Cpu, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ClaudeModelSelectorProps {
@@ -16,46 +31,240 @@ interface ClaudeModelSelectorProps {
   onChange: (modelId: string) => void
   disabled?: boolean
   compact?: boolean
+  agentType?: AgentType
+  onAgentTypeChange?: (agentType: AgentType) => void
+  opencodeEnabled?: boolean
 }
+
+const AGENTS: { id: AgentType; name: string; description: string }[] = [
+  { id: 'claude-code', name: 'Claude Code', description: "Anthropic's agent SDK" },
+  { id: 'kimi-k2', name: 'Claude Code - Kimi K2', description: 'Moonshot Kimi K2 via Claude SDK' },
+  { id: 'opencode', name: 'OpenCode', description: 'Open-source coding agent' },
+]
 
 export function ClaudeModelSelector({
   value,
   onChange,
   disabled = false,
   compact = false,
+  agentType = 'claude-code',
+  onAgentTypeChange,
+  opencodeEnabled = false,
 }: ClaudeModelSelectorProps) {
-  const currentModel = getClaudeModelById(value)
-  // Ensure the Select always has a valid value to prevent "Select model" placeholder showing
-  const safeValue = currentModel ? value : DEFAULT_CLAUDE_MODEL
+  const models = getModelsForAgent(agentType)
+  const safeValue = resolveModelForAgent(value, agentType)
+  const currentModel = getClaudeModelById(safeValue)
+  // Filter agents: always show claude-code and kimi-k2, only show opencode when enabled
+  const availableAgents = AGENTS.filter(a => a.id !== 'opencode' || opencodeEnabled)
+
+  // Compact mode: single button that opens a dialog
+  if (compact) {
+    return (
+      <CompactSelector
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        agentType={agentType}
+        onAgentTypeChange={onAgentTypeChange}
+        models={models}
+        currentModel={currentModel}
+        availableAgents={availableAgents}
+      />
+    )
+  }
+
+  // Full mode: inline selects (used on homepage)
+  return (
+    <div className="flex items-center gap-1.5">
+      {onAgentTypeChange && (
+        <Select
+          value={agentType}
+          onValueChange={(v) => onAgentTypeChange(v as AgentType)}
+          disabled={disabled}
+        >
+          <SelectTrigger className="h-12 w-[160px]">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+              <SelectValue>
+                {agentType === 'opencode' ? 'OpenCode' : 'Claude Code'}
+              </SelectValue>
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            {availableAgents.map((agent) => (
+              <SelectItem key={agent.id} value={agent.id}>
+                <div className="flex flex-col">
+                  <span className="font-medium">{agent.name}</span>
+                  <span className="text-xs text-muted-foreground">{agent.description}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      <Select value={safeValue} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger className="h-12 w-[200px]">
+          <div className="flex items-center gap-2">
+            <Cpu className="h-4 w-4 text-muted-foreground shrink-0" />
+            <SelectValue>
+              {currentModel?.name || models[0]?.name}
+            </SelectValue>
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          {models.map((model) => (
+            <SelectItem key={model.id} value={model.id}>
+              <div className="flex flex-col">
+                <span className="font-medium">{model.name}</span>
+                <span className="text-xs text-muted-foreground">{model.description}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+/** Compact dialog version for space-constrained layouts */
+function CompactSelector({
+  value,
+  onChange,
+  disabled,
+  agentType = 'claude-code',
+  onAgentTypeChange,
+  models,
+  currentModel,
+  availableAgents,
+}: {
+  value: string
+  onChange: (modelId: string) => void
+  disabled: boolean
+  agentType: AgentType
+  onAgentTypeChange?: (agentType: AgentType) => void
+  models: ReturnType<typeof getModelsForAgent>
+  currentModel: ReturnType<typeof getClaudeModelById>
+  availableAgents: typeof AGENTS
+}) {
+  const [open, setOpen] = useState(false)
+
+  // Resolve value to a valid model for the current agent type
+  const resolvedValue = resolveModelForAgent(value, agentType)
+
+  // Auto-correct the parent if stored value doesn't match
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  useEffect(() => {
+    const resolved = resolveModelForAgent(value, agentType)
+    if (resolved !== value) {
+      onChangeRef.current(resolved)
+    }
+  }, [value, agentType])
+
+  const handleAgentChange = (newAgent: AgentType) => {
+    if (onAgentTypeChange) {
+      onAgentTypeChange(newAgent)
+      onChange(getDefaultModelForAgent(newAgent))
+    }
+  }
+
+  const handleModelChange = (modelId: string) => {
+    onChange(modelId)
+    setOpen(false)
+  }
 
   return (
-    <Select value={safeValue} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger
-        className={cn(
-          compact
-            ? 'h-10 border border-input text-xs border-gray-200 bg-background shadow-sm hover:bg-accent hover:text-accent-foreground'
-            : 'h-12 w-[200px]'
-        )}
-      >
-        <div className="flex items-center gap-2 ">
-          <Cpu className="h-4 w-4 text-muted-foreground shrink-0" />
-          <SelectValue placeholder="Select model">
-            {currentModel?.name || getClaudeModelById(DEFAULT_CLAUDE_MODEL)?.name || 'Select model'}
-          </SelectValue>
-        </div>
-      </SelectTrigger>
-      <SelectContent>
-        {CLAUDE_MODELS.map((model) => (
-          <SelectItem key={model.id} value={model.id}>
-            <div className="flex flex-col">
-              <span className="font-medium">{model.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {model.description}
-              </span>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          className="h-10 text-xs border-gray-200 gap-1.5"
+        >
+          <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="hidden sm:inline">
+            {agentType === 'opencode' ? 'OpenCode' : 'Claude Code'} · {getClaudeModelById(resolvedValue)?.name || models[0]?.name}
+          </span>
+          <span className="sm:hidden">{agentType === 'opencode' ? 'OC' : 'CC'}</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[360px]">
+        <button
+          onClick={() => setOpen(false)}
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-background/50 backdrop-blur-sm border border-border/50 text-foreground hover:bg-background/80 transition-all sm:hidden"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <DialogHeader>
+          <DialogTitle>Agent Setup</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          {/* Agent selector */}
+          {onAgentTypeChange && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Agent</label>
+              <div className="grid grid-cols-2 gap-2">
+                {availableAgents.map((agent) => (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    onClick={() => handleAgentChange(agent.id)}
+                    className={cn(
+                      'relative flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition-colors',
+                      agentType === agent.id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-muted-foreground/30 hover:bg-accent'
+                    )}
+                  >
+                    {agentType === agent.id && (
+                      <Check className="absolute top-2 right-2 h-3.5 w-3.5 text-primary" />
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <Bot className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{agent.name}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{agent.description}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+          )}
+
+          {/* Model selector */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Model</label>
+            <div className="space-y-1.5">
+              {models.map((model) => {
+                const isSelected = resolvedValue === model.id
+                return (
+                  <button
+                    key={model.id}
+                    type="button"
+                    onClick={() => handleModelChange(model.id)}
+                    className={cn(
+                      'relative flex w-full items-start rounded-lg border p-3 text-left transition-colors',
+                      isSelected
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-muted-foreground/30 hover:bg-accent'
+                    )}
+                  >
+                    {isSelected && (
+                      <Check className="absolute top-2 right-2 h-3.5 w-3.5 text-primary" />
+                    )}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium">{model.name}</span>
+                      <span className="text-xs text-muted-foreground">{model.description}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

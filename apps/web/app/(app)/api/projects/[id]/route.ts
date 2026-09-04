@@ -2,7 +2,7 @@ import { db } from '@/lib/db'
 import { projects, chat } from '@react-native-vibe-code/database'
 import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
-import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
 import { inngest } from '@/lib/inngest'
 import { corsHeaders, handleCorsOptions } from '@/lib/cors'
 import { addCustomDomain } from '@react-native-vibe-code/publish'
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     // If project is paused and has a sandboxId, try to connect to it
     if (project.status === 'paused' && project.sandboxId) {
       try {
-        const sandbox = await Sandbox.connect(project.sandboxId)
+        const sandbox = await connectSandbox(project.sandboxId)
         
         // Update project status
         await db
@@ -190,7 +190,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       // Also update deployedUrl if the project has been deployed
       // This ensures "Visit Webapp" shows the correct URL
       if (existingProject[0].cloudflareProjectName || existingProject[0].deployedUrl) {
-        updateData.deployedUrl = `https://${sanitizedDomain}.capsulethis.app`
+        updateData.deployedUrl = `https://${sanitizedDomain}.pages.dev`
       }
     }
 
@@ -285,7 +285,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     // 1. Kill the E2B sandbox if active
     if (project.sandboxId) {
       try {
-        const sbx = await Sandbox.connect(project.sandboxId)
+        const sbx = await connectSandbox(project.sandboxId)
         await sbx.kill()
         console.log(`[Delete] Killed E2B sandbox ${project.sandboxId}`)
       } catch (e) {

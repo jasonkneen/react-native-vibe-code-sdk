@@ -7,6 +7,7 @@ const monorepoRoot = resolve(__dirname, '../..');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium-min'],
   reactCompiler: true,
   typescript: {
     ignoreBuildErrors: true,
@@ -20,6 +21,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'cdn-icons-png.flaticon.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.public.blob.vercel-storage.com',
       },
     ],
   },

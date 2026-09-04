@@ -8,7 +8,12 @@
   ],
   "installCommand": "pnpm install",
   "framework": "nextjs",
-  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/x-bot/poll",
+      "schedule": "* * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

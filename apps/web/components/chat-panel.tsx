@@ -6,6 +6,7 @@ import { Messages } from '@/components/chat/messages'
 import type { Message } from 'ai'
 import type React from 'react'
 import { usePusherHoverSelection } from '@/hooks/usePusherHoverSelection'
+import { useRemoteControlStatus } from '@/hooks/useRemoteControlStatus'
 
 interface ChatPanelProps {
   messages: Message[]
@@ -19,6 +20,7 @@ interface ChatPanelProps {
   currentTemplate?: string
   status: 'streaming' | 'error' | 'submitted' | 'ready'
   sandboxId?: string | null
+  isSandboxRecovering?: boolean
   pendingEditData?: { fileEdition: string; selectionData: any } | null
   projectId?: string
   userId?: string
@@ -27,6 +29,9 @@ interface ChatPanelProps {
   isWaitingForFirstMessage?: boolean
   selectedModel: string
   onModelChange: (modelId: string) => void
+  agentType?: 'claude-code' | 'opencode' | 'kimi-k2'
+  onAgentTypeChange?: (agentType: 'claude-code' | 'opencode' | 'kimi-k2') => void
+  opencodeEnabled?: boolean
   imageAttachments?: ImageAttachment[]
   onImageAttachmentsChange?: (attachments: ImageAttachment[]) => void
   selectedSkills?: string[]
@@ -35,6 +40,7 @@ interface ChatPanelProps {
   isCloudPanelOpen?: boolean
   onCloudPanelOpen?: () => void
   onCloudPanelClose?: () => void
+  onIframeRefresh?: () => void
 }
 
 export function ChatPanel({
@@ -45,11 +51,15 @@ export function ChatPanel({
   isLoading,
   status,
   sandboxId,
+  isSandboxRecovering = false,
   projectId,
   userId,
   isWaitingForFirstMessage,
   selectedModel,
   onModelChange,
+  agentType,
+  onAgentTypeChange,
+  opencodeEnabled = false,
   imageAttachments = [],
   onImageAttachmentsChange,
   selectedSkills = [],
@@ -58,9 +68,16 @@ export function ChatPanel({
   isCloudPanelOpen = false,
   onCloudPanelOpen,
   onCloudPanelClose,
+  onIframeRefresh,
 }: ChatPanelProps) {
+  const { isRemoteControlActive } = useRemoteControlStatus({
+    sandboxId: sandboxId ?? null,
+    onComplete: onIframeRefresh,
+  })
+
   return (
     <BaseChatPanel
+      isRemoteControlActive={isRemoteControlActive}
       messages={messages}
       input={input}
       handleInputChange={handleInputChange}
@@ -73,6 +90,8 @@ export function ChatPanel({
       isWaitingForFirstMessage={isWaitingForFirstMessage}
       selectedModel={selectedModel}
       onModelChange={onModelChange}
+      agentType={agentType}
+      onAgentTypeChange={onAgentTypeChange}
       imageAttachments={imageAttachments}
       onImageAttachmentsChange={onImageAttachmentsChange}
       selectedSkills={selectedSkills}
@@ -102,6 +121,7 @@ export function ChatPanel({
           handleSubmit={props.handleSubmit}
           isLoading={props.isLoading}
           sandboxId={props.sandboxId}
+          isSandboxRecovering={isSandboxRecovering}
           isHoverModeEnabled={props.isHoverModeEnabled}
           onToggleHoverMode={props.onToggleHoverMode}
           onDisableHoverMode={props.onDisableHoverMode}
@@ -109,6 +129,9 @@ export function ChatPanel({
           onScrollToBottom={() => {}}
           selectedModel={props.selectedModel}
           onModelChange={props.onModelChange}
+          agentType={props.agentType}
+          onAgentTypeChange={props.onAgentTypeChange}
+          opencodeEnabled={opencodeEnabled}
           imageAttachments={props.imageAttachments}
           onImageAttachmentsChange={props.onImageAttachmentsChange}
           selectedSkills={props.selectedSkills}

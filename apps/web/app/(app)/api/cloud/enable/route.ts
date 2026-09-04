@@ -8,10 +8,12 @@ import { eq, and } from 'drizzle-orm'
 import { auth } from '@/lib/auth/config'
 import { headers } from 'next/headers'
 import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
 import { pusherServer } from '@/lib/pusher'
 import { provisionManagedConvexProject } from '@/lib/convex/management-api'
 import { updateSandboxEnvFile } from '@/lib/convex/sandbox-utils'
 import { startExpoServer } from '@/lib/server-utils'
+import { tunnelMode as tunnelModeFlag } from '@/flags'
 
 // Convex root config file
 const CONVEX_JSON = `{
@@ -140,18 +142,18 @@ async function injectConvexIntoLayout(sandbox: Sandbox): Promise<void> {
     newContent = CONVEX_IMPORTS + '\n' + currentContent
   }
 
-  // Wrap ThemeProvider with ConvexWrapper
-  // Find the pattern: <ThemeProvider ...>
+  // Wrap ReloadProvider with ConvexWrapper (outermost wrapper)
+  // This ensures ALL components in the tree have access to Convex,
+  // even if the AI later adds context providers between ReloadProvider and ThemeProvider
   newContent = newContent.replace(
-    /(<ThemeProvider\s+value=\{[^}]+\}>)/,
-    '<ConvexWrapper>\n          $1'
+    /(<ReloadProvider>)/,
+    '<ConvexWrapper>\n      $1'
   )
 
-  // Find the closing </ThemeProvider> and add </ConvexWrapper> after it
-  // We need to find the right </ThemeProvider> (the one that closes the main theme provider)
+  // Find the closing </ReloadProvider> and add </ConvexWrapper> after it
   newContent = newContent.replace(
-    /(<\/ThemeProvider>)(\s*<\/ReloadProvider>)/,
-    '$1\n        </ConvexWrapper>$2'
+    /(<\/ReloadProvider>)/,
+    '$1\n    </ConvexWrapper>'
   )
 
   // Write the modified content back
@@ -276,7 +278,7 @@ export async function POST(request: NextRequest) {
 
     // Connect to sandbox
     console.log('[Cloud Enable] Connecting to sandbox:', project.sandboxId)
-    const sandbox = await Sandbox.connect(project.sandboxId)
+    const sandbox = await connectSandbox(project.sandboxId)
 
     // Step 1: Create the convex folder and write template files
     console.log('[Cloud Enable] Creating convex folder and writing template files...')
@@ -363,7 +365,8 @@ export async function POST(request: NextRequest) {
     // Metro bundles env vars at build time, so we need to restart the server
     console.log('[Cloud Enable] Restarting Expo server to pick up new env variables...')
     try {
-      await startExpoServer(sandbox, projectId)
+      const currentTunnelMode = await tunnelModeFlag()
+      await startExpoServer(sandbox, projectId, undefined, currentTunnelMode as any)
       console.log('[Cloud Enable] Expo server restarted successfully')
     } catch (error) {
       console.error('[Cloud Enable] Failed to restart Expo server:', error)

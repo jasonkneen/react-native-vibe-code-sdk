@@ -181,6 +181,8 @@ describe('SENSITIVE_PATTERNS', () => {
     'BUILD_MODE=production',
     'NODE_ENV=development',
     'PORT=3000',
+    'Unexpected token in app.tsx',
+    'Unexpected token: expected a closing brace',
   ]
 
   shouldNotMatch.forEach((str) => {

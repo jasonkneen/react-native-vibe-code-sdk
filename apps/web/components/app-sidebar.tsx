@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Image, FolderOpen, Database, ChevronLeft, ChevronRight, X, MessageSquare, Cloud } from "lucide-react"
+import { Image, FolderOpen, Database, ChevronLeft, ChevronRight, X, MessageSquare, Cloud, KeyRound, Settings2 } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -19,10 +19,13 @@ import { AssetsPanel } from "@/components/assets-panel"
 import { ProjectsPanel } from "@/components/projects-panel"
 import { BackendPanel } from "@/components/backend-panel"
 import { CloudSidebarPanel } from "@/components/cloud-sidebar-panel"
+import { EnvVarsPanel } from "@/components/env-vars-panel"
+import { ByokPanel } from "@/components/byok-panel"
 import { UserMenu } from "@/components/user-menu"
 import { Session } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import posthog from 'posthog-js'
 
 interface AppSidebarProps {
   children: React.ReactNode
@@ -39,6 +42,7 @@ interface AppSidebarProps {
   cloudEnabled?: boolean
   cloudDeploymentUrl?: string
   onCloudEnabled?: () => void
+  onRequestChange?: (prompt: string) => void
 }
 
 function SidebarToggle() {
@@ -94,9 +98,21 @@ function SidebarNav({
       spacer: false,
     },
     {
+      id: "byok",
+      label: "BYOK",
+      icon: KeyRound,
+      spacer: false,
+    },
+    {
       id: "backend",
       label: "Backend",
       icon: Database,
+      spacer: false,
+    },
+    {
+      id: "envvars",
+      label: "Env Vars",
+      icon: Settings2,
       spacer: false,
     },
     {
@@ -126,7 +142,10 @@ function SidebarNav({
                 <SidebarMenuButton
                   tooltip="Chat"
                   isActive={activePanel === null}
-                  onClick={() => onPanelChange(null)}
+                  onClick={() => {
+                    posthog.capture('sidebar_section_clicked', { section: 'chat' })
+                    onPanelChange(null)
+                  }}
                   className={cn(
                     "transition-colors",
                     activePanel === null && "bg-accent"
@@ -137,11 +156,14 @@ function SidebarNav({
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {menuItems.map((item) => (
-                <SidebarMenuItem key={item.id} className={item.spacer ? 'border-t-1 border-gray-300 pt-2 mt-2' : undefined}>
+                <SidebarMenuItem key={item.id} className={cn(item.spacer && 'border-t-1 border-gray-300 pt-2 mt-2', item.id === 'backend' && 'hidden')}>
                   <SidebarMenuButton
                     tooltip={item.label}
                     isActive={activePanel === item.id}
-                    onClick={() => onPanelChange(activePanel === item.id ? null : item.id)}
+                    onClick={() => {
+                      posthog.capture('sidebar_section_clicked', { section: item.id })
+                      onPanelChange(activePanel === item.id ? null : item.id)
+                    }}
                     className={cn(
                       "transition-colors ",
                       activePanel === item.id && "bg-accent"
@@ -296,6 +318,7 @@ export function AppSidebar({
   cloudEnabled,
   cloudDeploymentUrl,
   onCloudEnabled,
+  onRequestChange,
 }: AppSidebarProps) {
   const [internalActivePanel, setInternalActivePanel] = useState<string | null>(null)
   const [isFirstOpen, setIsFirstOpen] = useState(true)
@@ -399,6 +422,32 @@ export function AppSidebar({
               cloudEnabled={cloudEnabled || false}
               deploymentUrl={cloudDeploymentUrl}
               onCloudEnabled={onCloudEnabled}
+              onRequestChange={onRequestChange}
+              onClose={() => handlePanelChange(null)}
+            />
+          </PanelContent>
+
+          <PanelContent
+            isBottomOption={false}
+            isOpen={activePanel === "envvars"}
+            isFirstOpen={isFirstOpen}
+            isSwitching={isSwitching}
+            onClose={() => handlePanelChange(null)}
+          >
+            <EnvVarsPanel
+              projectId={projectId || ''}
+              sandboxId={sandboxId}
+            />
+          </PanelContent>
+
+          <PanelContent
+            isOpen={activePanel === "byok"}
+            isFirstOpen={isFirstOpen}
+            isSwitching={isSwitching}
+            onClose={() => handlePanelChange(null)}
+            isBottomOption={false}
+          >
+            <ByokPanel
               onClose={() => handlePanelChange(null)}
             />
           </PanelContent>

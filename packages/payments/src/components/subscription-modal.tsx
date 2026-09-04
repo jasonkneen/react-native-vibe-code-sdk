@@ -214,6 +214,10 @@ export function SubscriptionModal({
             <DialogTitle className="text-2xl font-bold text-center">
               {isLoadingStatus ? 'Loading...' : 'Choose Your Plan'}
             </DialogTitle>
+            <div className="text-center mt-2 bg-muted border border-border rounded-lg px-4 py-3 text-sm text-foreground">
+              <span className="font-semibold">Announcement: </span>
+              We have halved plan prices ✂️🥳 . React Native Vibe Code is now the most affordable vibe coding platform to create React Native apps. We will keep pushing to make the project the most open and affordable option to easily vibe code React Rative apps. Enjoy.
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -255,6 +259,9 @@ export function SubscriptionModal({
                         /{plan.period}
                       </span>
                     </div>
+                    <span className="text-2xl text-muted-foreground line-through">
+                      ${plan.originalPrice}/{plan.period}
+                    </span>
                   </div>
 
                   <ul className="space-y-3">

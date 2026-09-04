@@ -33,9 +33,11 @@ export async function getUserMessageUsage(userId: string): Promise<MessageUsage>
       )
       .limit(1)
 
-    const messageLimit = subscription.length > 0
-      ? parseInt(subscription[0].messageLimit || PAYMENTS_CONFIG.FREE_PLAN_MESSAGE_LIMIT.toString())
-      : PAYMENTS_CONFIG.FREE_PLAN_MESSAGE_LIMIT
+    const currentPlan = subscription.length > 0 ? (subscription[0].currentPlan || 'free') : 'free'
+    const isFreePlan = currentPlan === 'free' || !subscription.length || subscription[0].status !== 'active'
+    const messageLimit = isFreePlan
+      ? PAYMENTS_CONFIG.FREE_PLAN_MESSAGE_LIMIT
+      : parseInt(subscription[0].messageLimit || PAYMENTS_CONFIG.FREE_PLAN_MESSAGE_LIMIT.toString())
     const usageCount = usage.length > 0 ? parseInt(usage[0].usageCount || '0') : 0
     const hasActiveSubscription = subscription.length > 0 && subscription[0].status === 'active'
 
@@ -44,16 +46,17 @@ export async function getUserMessageUsage(userId: string): Promise<MessageUsage>
       usageCount,
       remainingMessages: Math.max(0, messageLimit - usageCount),
       hasActiveSubscription,
-      currentPlan: subscription.length > 0 ? (subscription[0].currentPlan || 'free') : 'free',
+      currentPlan,
       currentMonth,
     }
   } catch (error) {
     console.error('[Payments] Error getting user message usage:', error)
-    // Return default free tier limits on error
+    // On DB error, allow the message through rather than blocking the user.
+    // A missing table or transient DB issue should not prevent paid users from chatting.
     return {
-      messageLimit: PAYMENTS_CONFIG.FREE_PLAN_MESSAGE_LIMIT,
+      messageLimit: 1,
       usageCount: 0,
-      remainingMessages: PAYMENTS_CONFIG.FREE_PLAN_MESSAGE_LIMIT,
+      remainingMessages: 1,
       hasActiveSubscription: false,
       currentPlan: 'free',
       currentMonth: getCurrentMonth(),
@@ -70,11 +73,9 @@ export async function canUserSendMessage(userId: string): Promise<CanSendMessage
   if (usage.remainingMessages <= 0) {
     return {
       canSend: false,
-      reason: `You've reached your monthly message limit of ${usage.messageLimit} messages. ${
-        usage.hasActiveSubscription
-          ? 'Your quota will reset on the 1st of next month.'
-          : 'Please upgrade your plan to continue.'
-      }`,
+      reason: usage.hasActiveSubscription
+        ? `You've reached your monthly message limit of ${usage.messageLimit} messages. Your quota will reset on the 1st of next month.`
+        : "You've used your free generation. Please upgrade your plan to continue building.",
       usage,
     }
   }

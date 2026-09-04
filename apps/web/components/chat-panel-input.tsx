@@ -25,6 +25,7 @@ import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { isMobileDevice } from '@/lib/utils/device-detection'
 import type { AISkill } from '@/lib/skills'
 import { AI_SKILLS } from '@/lib/skills'
+import posthog from 'posthog-js'
 
 interface HoverSelectionData {
   elementId: string
@@ -59,6 +60,7 @@ interface ChatPanelInputProps {
   handleSubmit: (e: React.FormEvent, options?: ChatRequestOptions) => void
   isLoading: boolean
   sandboxId?: string | null
+  isSandboxRecovering?: boolean
   isHoverModeEnabled: boolean
   onToggleHoverMode: (enabled: boolean) => void
   onDisableHoverMode: () => void
@@ -66,6 +68,9 @@ interface ChatPanelInputProps {
   onScrollToBottom?: () => void
   selectedModel: string
   onModelChange: (modelId: string) => void
+  agentType?: 'claude-code' | 'opencode' | 'kimi-k2'
+  onAgentTypeChange?: (agentType: 'claude-code' | 'opencode' | 'kimi-k2') => void
+  opencodeEnabled?: boolean
   imageAttachments?: ImageAttachment[]
   onImageAttachmentsChange?: (attachments: ImageAttachment[]) => void
   selectedSkills?: string[]
@@ -82,6 +87,7 @@ export const ChatPanelInput = memo(function ChatPanelInput({
   handleSubmit,
   isLoading,
   sandboxId,
+  isSandboxRecovering = false,
   isHoverModeEnabled,
   onToggleHoverMode,
   onDisableHoverMode,
@@ -89,6 +95,9 @@ export const ChatPanelInput = memo(function ChatPanelInput({
   onScrollToBottom,
   selectedModel,
   onModelChange,
+  agentType,
+  onAgentTypeChange,
+  opencodeEnabled,
   imageAttachments = [],
   onImageAttachmentsChange,
   selectedSkills = [],
@@ -114,7 +123,16 @@ export const ChatPanelInput = memo(function ChatPanelInput({
   const keepAliveInterval = useRef<any>(null)
   const baseInputRef = useRef<string>('')
   const recordSoundRef = useRef<HTMLAudioElement | null>(null)
-  
+  const lastEditorContentRef = useRef<string>('')
+
+  // Sync external input changes (e.g., from "Send to Fix") into the TipTap editor
+  useEffect(() => {
+    if (input && input !== lastEditorContentRef.current) {
+      editorRef.current?.setContent(input)
+      lastEditorContentRef.current = input
+    }
+  }, [input])
+
   const { connection, connectToDeepgram, disconnectFromDeepgram, connectionState } = useDeepgram()
   const { setupMicrophone, microphone, startMicrophone, stopMicrophone, microphoneState } = useMicrophone()
   const { registerShortcut, unregisterShortcut } = useKeyboardShortcuts()
@@ -462,6 +480,12 @@ export const ChatPanelInput = memo(function ChatPanelInput({
 
   // Enhanced submit handler that includes file edition metadata
   const enhancedHandleSubmit = (e: React.FormEvent) => {
+    posthog.capture('message_sent', {
+      has_images: imageAttachments.length > 0,
+      has_skills: selectedSkills.length > 0,
+      has_selection: !!latestSelection,
+    })
+
     // Stop recording if currently recording
     if (isRecording) {
       setIsRecording(false)
@@ -503,6 +527,7 @@ export const ChatPanelInput = memo(function ChatPanelInput({
 
     // Clear the TipTap editor content
     editorRef.current?.clearContent()
+    lastEditorContentRef.current = ''
 
     // Clear image attachments immediately on submit (not in onFinish)
     // This is safe now because experimental_prepareRequestBody checks the message's
@@ -527,10 +552,10 @@ export const ChatPanelInput = memo(function ChatPanelInput({
 
   return (
     <div
-      className="p-2 pt-0 border-t bg-background flex-shrink-0 md:relative md:pb-4 min-h-[214px] md:min-h-0 absolute bottom-[5px]"
+      data-chat-input
+      className="p-2 pt-0 border-t bg-background flex-shrink-0 w-full"
       style={{
-        // On mobile, use sticky positioning and account for safe area
-        // paddingBottom: isMobile ? 'max(1rem, env(safe-area-inset-bottom))' : undefined,
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
       }}
     >
       {/* Show selection indicator when element is selected */}
@@ -543,9 +568,12 @@ export const ChatPanelInput = memo(function ChatPanelInput({
                 <div className="font-medium text-blue-800 dark:text-blue-200">
                   Selected: {latestSelection.tagName}
                 </div>
-                {/* <div className="text-blue-600 dark:text-blue-400 text-xs">
-                  {getFileEditionRef()}
-                </div> */}
+                {getFileEditionRef() && (
+                  <div className="text-blue-600 dark:text-blue-400 text-xs font-mono">
+                    {getFileEditionRef()?.substring(0,40)}
+                    ...
+                  </div>
+                )}
               </div>
             </div>
             <Button
@@ -557,11 +585,11 @@ export const ChatPanelInput = memo(function ChatPanelInput({
               <X className="h-3 w-3" />
             </Button>
           </div>
-          {latestSelection.className && (
+          {/* {latestSelection.className && (
             <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">
               Classes: {latestSelection.className}
             </div>
-          )}
+          )} */}
         </div>
       )}
 
@@ -620,7 +648,9 @@ export const ChatPanelInput = memo(function ChatPanelInput({
                 <ChatEditor
                   ref={editorRef}
                   placeholder={
-                    latestSelection
+                    isSandboxRecovering
+                      ? 'Sandbox is restarting...'
+                      : latestSelection
                       ? 'Describe changes for the selected element...'
                       : isRecording
                       ? useRealtimeVoice
@@ -632,8 +662,9 @@ export const ChatPanelInput = memo(function ChatPanelInput({
                       ? 'Describe what you want to build...'
                       : 'Make changes, add new features, type / for integrations...'
                   }
-                  disabled={isLoading}
+                  disabled={isLoading || isSandboxRecovering}
                   onContentChange={(text, skills) => {
+                    lastEditorContentRef.current = text
                     const event = {
                       target: { value: text },
                     } as React.ChangeEvent<HTMLTextAreaElement>
@@ -677,6 +708,9 @@ export const ChatPanelInput = memo(function ChatPanelInput({
               onChange={onModelChange}
               disabled={isLoading || isTranscribing}
               compact
+              agentType={agentType}
+              onAgentTypeChange={onAgentTypeChange}
+              opencodeEnabled={opencodeEnabled}
             />
           </div>
           <div className="flex space-x-2">
@@ -684,11 +718,11 @@ export const ChatPanelInput = memo(function ChatPanelInput({
             <Button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading || isUploadingImages}
+              disabled={isLoading || isUploadingImages || isSandboxRecovering}
               size="icon"
               variant="outline"
               className="rounded-xl h-10 w-10"
-              title="Attach images"
+              title={isSandboxRecovering ? 'Sandbox is restarting...' : 'Attach images'}
             >
               {isUploadingImages ? (
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -700,7 +734,7 @@ export const ChatPanelInput = memo(function ChatPanelInput({
             <Button
               type="button"
               onClick={toggleRecording}
-              disabled={isTranscribing || (isLoading && useRealtimeVoice)}
+              disabled={isTranscribing || (isLoading && useRealtimeVoice) || isSandboxRecovering}
               size="icon"
               variant={isRecording ? "destructive" : "outline"}
               className="rounded-xl h-10 w-10"
@@ -724,7 +758,7 @@ export const ChatPanelInput = memo(function ChatPanelInput({
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || (!input?.trim() && imageAttachments.length === 0 && selectedSkills.length === 0)}
+              disabled={isLoading || isSandboxRecovering || (!input?.trim() && imageAttachments.length === 0 && selectedSkills.length === 0)}
               size="icon"
               className="rounded-xl h-10 w-10"
             >
@@ -732,8 +766,8 @@ export const ChatPanelInput = memo(function ChatPanelInput({
             </Button>
           </div>
         </div>
-        {/* Cloud row - new bottom row */}
-        <div className="relative flex items-center gap-x-2 bg-background border-t-1 -m-2 p-2 pl-2">
+        {/* Cloud row - new bottom row (hidden on mobile) */}
+        <div className="relative hidden md:flex items-center gap-x-2 bg-background border-t-1 -m-2 p-2 pl-2">
           {/* Invisible overlay when panel is open - clicking it dismisses the panel */}
           {isCloudPanelOpen && (
             <div

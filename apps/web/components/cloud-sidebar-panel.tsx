@@ -1,25 +1,26 @@
 'use client'
 
 import { useState } from 'react'
+import posthog from 'posthog-js'
 import { Button } from '@/components/ui/button'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Database, Zap, Cloud, HardDrive, CheckCircle2, Loader2, ExternalLink } from 'lucide-react'
+import { Database, Zap, Cloud, HardDrive, CheckCircle2, Loader2, ExternalLink, LayoutDashboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
+import { ConvexDashboardModal } from '@/components/convex-dashboard-modal'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+
+const CONVEX_SETUP_PROMPT = 'We have added Convex functionality to the app. Review the codebase and update the current functionality to make use of the database and any needed queries, mutations, and Convex features you see fit.'
 
 interface CloudSidebarPanelProps {
   projectId?: string
   cloudEnabled: boolean
   deploymentUrl?: string
   onCloudEnabled?: () => void
+  onRequestChange?: (prompt: string) => void
   onClose: () => void
 }
 
@@ -28,10 +29,12 @@ export function CloudSidebarPanel({
   cloudEnabled,
   deploymentUrl,
   onCloudEnabled,
+  onRequestChange,
   onClose,
 }: CloudSidebarPanelProps) {
   const [isEnabling, setIsEnabling] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showDashboard, setShowDashboard] = useState(false)
+  const [showSetupComplete, setShowSetupComplete] = useState(false)
 
   const handleEnableCloud = async () => {
     if (!projectId) {
@@ -39,7 +42,6 @@ export function CloudSidebarPanel({
       return
     }
 
-    setShowConfirmDialog(false)
     setIsEnabling(true)
 
     try {
@@ -57,8 +59,10 @@ export function CloudSidebarPanel({
         throw new Error(data.error || 'Failed to enable cloud')
       }
 
-      toast.success('Cloud enabled successfully! Your database is now ready.')
+      posthog.capture('cloud_enabled', { project_id: projectId })
       onCloudEnabled?.()
+      // Delay to let any portal DOM cleanup finish before opening the new dialog
+      setTimeout(() => setShowSetupComplete(true), 300)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to enable cloud'
       // "already enabled" is not a real error — just stale UI state
@@ -120,6 +124,15 @@ export function CloudSidebarPanel({
                   </div>
                 )}
 
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowDashboard(true)}
+                >
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  Open Convex Dashboard
+                </Button>
+
                 <p className="text-sm text-muted-foreground">
                   Your app now has access to a real-time database. The AI will use Convex for all data persistence and backend logic.
                 </p>
@@ -170,7 +183,7 @@ export function CloudSidebarPanel({
 
                 <Button
                   className="w-full"
-                  onClick={() => setShowConfirmDialog(true)}
+                  onClick={handleEnableCloud}
                   disabled={isEnabling || !projectId}
                 >
                   {isEnabling ? (
@@ -191,30 +204,43 @@ export function CloudSidebarPanel({
         </div>
       </div>
 
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Enable Cloud Backend?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="text-sm text-muted-foreground space-y-2">
-                <p>This will set up a real-time database for your project. Once enabled:</p>
-                <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-                  <li>A Convex backend will be provisioned</li>
-                  <li>Database files will be added to your project</li>
-                  <li>The AI will be able to create backend logic</li>
-                  <li>Data will sync in real-time across devices</li>
-                </ul>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleEnableCloud}>
-              Enable Cloud
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConvexDashboardModal
+        open={showDashboard}
+        onOpenChange={setShowDashboard}
+        projectId={projectId}
+      />
+
+      <Dialog open={showSetupComplete} onOpenChange={setShowSetupComplete}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Convex is Setup and Ready
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              If you want to add backend functionalities on top of the app, you need to make an extra prompt request to ask the agent to add the functionality to your current working app.
+            </p>
+            <div className="p-3 bg-muted/50 rounded-lg border">
+              <p className="text-sm italic text-foreground">
+                &ldquo;{CONVEX_SETUP_PROMPT}&rdquo;
+              </p>
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => {
+                onRequestChange?.(CONVEX_SETUP_PROMPT)
+                setShowSetupComplete(false)
+                onClose()
+              }}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Request Change
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

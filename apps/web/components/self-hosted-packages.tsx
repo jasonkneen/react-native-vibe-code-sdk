@@ -93,6 +93,14 @@ const packages: PackageInfo[] = [
     docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/visual-edits',
   },
   {
+    id: 'remote-control',
+    name: 'remote-control',
+    shortDescription: 'Real-time remote control for mobile devices with live preview and interaction sync',
+    icon: <Sparkles className="w-5 h-5" />,
+    color: 'cyan',
+    docsPath: 'https://github.com/react-native-vibe-code/react-native-vibe-code-sdk/tree/main/packages/remote-control',
+  },
+  {
     id: 'database',
     name: 'database',
     shortDescription: 'PostgreSQL database layer with Drizzle ORM and Neon support',

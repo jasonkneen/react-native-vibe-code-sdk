@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { projects } from '@react-native-vibe-code/database'
 import { UsageTracker } from '@/lib/usage-tracking'
 import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
 import { eq, and } from 'drizzle-orm'
 import { getSkillTemplate, getSkillFilePath } from '@/lib/skills/templates'
 import { validateSkillIds } from '@/lib/skills'
@@ -22,12 +23,15 @@ export interface ClaudeCodeHandlerRequest {
   sandboxId?: string
   claudeModel?: string
   skills?: string[]
+  anthropicKey?: string
+  moonshotKey?: string
+  agentType?: string
 }
 
 export interface ClaudeCodeStreamCallbacks {
   onMessage: (message: string) => void
-  onComplete: (result: any) => void
-  onError: (error: string) => void
+  onComplete: (result: any) => void | Promise<void>
+  onError: (error: string) => void | Promise<void>
 }
 
 /**
@@ -51,12 +55,12 @@ export async function handleClaudeCodeGeneration(
   })
 
   if (!request.userID) {
-    callbacks.onError('User ID is required')
+    await callbacks.onError('User ID is required')
     return
   }
 
   if (!request.projectId) {
-    callbacks.onError('Project ID is required')
+    await callbacks.onError('Project ID is required')
     return
   }
 
@@ -99,7 +103,7 @@ export async function handleClaudeCodeGeneration(
       }
 
       if (!project) {
-        callbacks.onError('Project not found after waiting. Please try again.')
+        await callbacks.onError('Project not found after waiting. Please try again.')
         return
       }
     }
@@ -128,17 +132,17 @@ export async function handleClaudeCodeGeneration(
       }
 
       if (!targetSandboxId) {
-        callbacks.onError('Container is still being created. Please wait a moment and try again.')
+        await callbacks.onError('Container is still being created. Please wait a moment and try again.')
         return
       }
     }
 
     // Connect to sandbox
-    sandbox = await Sandbox.connect(targetSandboxId)
+    sandbox = await connectSandbox(targetSandboxId)
     console.log(`[Claude Code Handler] Connected to sandbox: ${sandbox.sandboxId}`)
   } catch (error) {
     console.error('[Claude Code Handler] Error checking for existing project:', error)
-    callbacks.onError('Failed to find project or sandbox')
+    await callbacks.onError('Failed to find project or sandbox')
     return
   }
 
@@ -157,7 +161,7 @@ export async function handleClaudeCodeGeneration(
         console.error('[Claude Code Handler] Valid skill IDs can be found in lib/skills/config.ts')
       }
 
-      const prodUrl = process.env.NEXT_PUBLIC_PROD_URL || 'https://capsulethis.com'
+      const prodUrl = process.env.NEXT_PUBLIC_PROD_URL || 'https://reactnativevibecode.com'
 
       for (const skillId of request.skills) {
         console.log(`[Claude Code Handler] Processing skill ID: "${skillId}"`)
@@ -204,6 +208,9 @@ export async function handleClaudeCodeGeneration(
         sessionId: project.conversationId || undefined, // Pass session ID for resumption
         claudeModel: request.claudeModel,
         skills: request.skills,
+        anthropicKey: request.anthropicKey,
+        moonshotKey: request.moonshotKey,
+        agentType: request.agentType,
       },
       sandbox,
       {
@@ -289,9 +296,9 @@ export async function handleClaudeCodeGeneration(
             conversationId: result.conversationId,
           }
 
-          callbacks.onComplete(finalResult)
+          await callbacks.onComplete(finalResult)
         },
-        onError: (error: string) => {
+        onError: async (error: string) => {
           console.error('[Claude Code Handler] Stream error received from service:', {
             error,
             projectId: request.projectId,
@@ -299,7 +306,7 @@ export async function handleClaudeCodeGeneration(
             sandboxId: sandbox?.sandboxId,
             timestamp: new Date().toISOString(),
           })
-          callbacks.onError(error)
+          await callbacks.onError(error)
         },
       },
     )
@@ -316,6 +323,6 @@ export async function handleClaudeCodeGeneration(
     })
     console.error('===================================================================')
 
-    callbacks.onError(error instanceof Error ? error.message : 'Internal server error')
+    await callbacks.onError(error instanceof Error ? error.message : 'Internal server error')
   }
 }

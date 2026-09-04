@@ -1,9 +1,11 @@
 import { db } from '@/lib/db'
 import { projects } from '@react-native-vibe-code/database'
 import { startExpoServer } from '@/lib/server-utils'
-import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
+import type { Sandbox } from '@e2b/code-interpreter'
 import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
+import { tunnelMode as tunnelModeFlag } from '@/flags'
 
 export const maxDuration = 120 // 2 minutes for server start
 
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
         // Verify the sandbox is still active before returning cached URLs
         try {
           console.log('Verifying sandbox is still active:', sandboxId)
-          const testSandbox = await Sandbox.connect(sandboxId)
+          const testSandbox = await connectSandbox(sandboxId)
           await (testSandbox as any).close() // Close immediately after verification
 
           console.log(
@@ -97,7 +99,7 @@ export async function POST(req: NextRequest) {
     // Connect to sandbox
     let sandbox: Sandbox
     try {
-      sandbox = await Sandbox.connect(sandboxId)
+      sandbox = await connectSandbox(sandboxId)
       console.log(`Connected to sandbox for server start: ${sandbox.sandboxId}`)
     } catch (error) {
       console.error(`Failed to resume sandbox ${sandboxId}:`, error)
@@ -110,7 +112,8 @@ export async function POST(req: NextRequest) {
     // Start Expo server
     try {
       console.log('Starting Expo server...')
-      const serverResult = await startExpoServer(sandbox, projectId)
+      const currentTunnelMode = await tunnelModeFlag()
+      const serverResult = await startExpoServer(sandbox, projectId, undefined, currentTunnelMode as any)
 
       console.log('Expo server started successfully:', serverResult.url)
 
@@ -132,6 +135,7 @@ export async function POST(req: NextRequest) {
         ngrokUrl: serverResult.ngrokUrl,
         sandboxId,
         projectId,
+        tunnelMode: currentTunnelMode,
       })
     } catch (error) {
       console.error('Error starting Expo server:', error)

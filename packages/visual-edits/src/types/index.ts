@@ -162,6 +162,10 @@ export const PUSHER_EVENTS = {
   HOVER_MODE_TOGGLE: 'hover-mode-toggle',
   /** Event when element is selected in sandbox */
   HOVER_SELECTION: 'hover-selection',
+  /** Event when remote control (mobile) starts editing */
+  REMOTE_CONTROL_START: 'remote-control-start',
+  /** Event when remote control (mobile) finishes editing */
+  REMOTE_CONTROL_COMPLETE: 'remote-control-complete',
 } as const
 
 /**

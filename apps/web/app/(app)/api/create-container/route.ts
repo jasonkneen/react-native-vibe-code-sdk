@@ -1,16 +1,17 @@
 import { db } from '@/lib/db'
-import { projects, convexProjectCredentials } from '@react-native-vibe-code/database'
+import { projects, convexProjectCredentials, projectEnvVars } from '@react-native-vibe-code/database'
 import { Sandbox } from '@e2b/code-interpreter'
+import { connectSandbox } from '@/lib/sandbox-connect'
 import { Octokit } from '@octokit/rest'
 import { GitHubService } from '@/lib/github-service'
 import { eq, and } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { generateTitleFromUserMessage } from '@/lib/name-generator'
 import { updateAppConfigWithName } from '@react-native-vibe-code/publish'
-import type { UIMessage } from 'ai'
 import { provisionManagedConvexProject } from '@/lib/convex/management-api'
 import { pusherServer } from '@/lib/pusher'
 import { restoreConvexEnvToSandbox } from '@/lib/convex/sandbox-utils'
+import { recordSandboxSession } from '@react-native-vibe-code/byok'
 
 export const maxDuration = 300 // 5 minutes for container creation
 
@@ -275,8 +276,8 @@ interface CreateContainerRequest {
   userID: string
   teamID?: string
   template?: string
-  chooseTemplate?: 'expo' | 'tamagui' | 'expo-testing'
-  firstMessage?: UIMessage // First user message to generate fantasy name
+  chooseTemplate?: 'expo' | 'tamagui' | 'expo-testing' | 'creative-suite'
+  firstMessage?: { role: string; content: string }
 }
 
 export async function createContainer(req: CreateContainerRequest) {
@@ -332,13 +333,13 @@ export async function createContainer(req: CreateContainerRequest) {
         // Try to connect to the existing sandbox
         if (project.sandboxId) {
           try {
-            sandbox = await Sandbox.connect(project.sandboxId)
+            sandbox = await connectSandbox(project.sandboxId)
             console.log(`Connected to existing sandbox: ${sandbox.sandboxId}`)
 
             // Set API Base URL for the sandbox app
             try {
               const { updateSandboxEnvFile } = await import('@/lib/convex/sandbox-utils')
-              const apiBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.capsulethis.com'
+              const apiBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.reactnativevibecode.com'
               await updateSandboxEnvFile(sandbox, 'EXPO_PUBLIC_API_BASE_URL', apiBaseUrl)
               console.log(`[Create Container] Set EXPO_PUBLIC_API_BASE_URL to ${apiBaseUrl}`)
             } catch (error) {
@@ -370,7 +371,8 @@ export async function createContainer(req: CreateContainerRequest) {
     const templateId = {
       expo: 'a3lmq9qc4tpctk5654yv',
       tamagui: '10aeyh6gcn9lmorirs2z',
-      'expo-testing': 'wxe2y93k4kafhbwqg2br'
+      'expo-testing': 'wxe2y93k4kafhbwqg2br',
+      'creative-suite': 'zfobltp0iwpu6gzs0k8k',
     }
     // Prioritize chooseTemplate from request body, fallback to env var, then default to 'expo'
     const templateSelection: keyof typeof templateId =
@@ -393,8 +395,19 @@ export async function createContainer(req: CreateContainerRequest) {
 
     console.log(`Created new sandbox: ${sandbox.sandboxId}`)
 
+    // Record sandbox session for BYOK usage tracking (new sandboxes only)
+    try {
+      if (userID && sandbox?.sandboxId) {
+        await recordSandboxSession(userID, sandbox.sandboxId)
+        console.log('[Create Container] Recorded sandbox session for user:', userID)
+      }
+    } catch (sessionErr) {
+      // Non-fatal — don't fail sandbox creation if tracking fails
+      console.error('[Create Container] Failed to record sandbox session:', sessionErr)
+    }
+
     // Generate app name from first message
-    let appName = 'my-app' // Default fallback
+    let appName = templateSelection === 'creative-suite' ? 'creative-suite' : 'my-app'
     if (firstMessage) {
       try {
         console.log('Generating app name from first message...')
@@ -491,7 +504,7 @@ export async function createContainer(req: CreateContainerRequest) {
     // Set API Base URL for the sandbox app
     try {
       const { updateSandboxEnvFile } = await import('@/lib/convex/sandbox-utils')
-      const apiBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.capsulethis.com'
+      const apiBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.reactnativevibecode.com'
       await updateSandboxEnvFile(sandbox, 'EXPO_PUBLIC_API_BASE_URL', apiBaseUrl)
       console.log(`[Create Container] Set EXPO_PUBLIC_API_BASE_URL to ${apiBaseUrl}`)
     } catch (error) {
@@ -516,6 +529,24 @@ export async function createContainer(req: CreateContainerRequest) {
       })
     } else {
       console.log('[Create Container] No Convex credentials - user can enable via Cloud button')
+    }
+
+    // Inject user-defined environment variables
+    try {
+      const { updateSandboxEnvFile: updateEnv } = await import('@/lib/convex/sandbox-utils')
+      const userEnvVars = await db
+        .select()
+        .from(projectEnvVars)
+        .where(eq(projectEnvVars.projectId, project.id))
+
+      for (const envVar of userEnvVars) {
+        await updateEnv(sandbox, envVar.key, envVar.value)
+      }
+      if (userEnvVars.length > 0) {
+        console.log(`[Create Container] Injected ${userEnvVars.length} user env vars`)
+      }
+    } catch (error) {
+      console.error('[Create Container] Failed to inject user env vars:', error)
     }
 
     // Create GitHub repository for the project

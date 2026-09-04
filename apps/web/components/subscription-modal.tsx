@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { Badge } from './ui/badge'
 import { getSubscriptionStatus } from '@/app/(app)/actions/subscription'
+import posthog from 'posthog-js'
 
 interface SubscriptionModalProps {
   open: boolean
@@ -24,6 +25,7 @@ interface SubscriptionModalProps {
 interface Plan {
   name: string
   price: number
+  originalPrice: number
   period: string
   features: string[]
   productId?: string
@@ -33,7 +35,8 @@ interface Plan {
 const plans: Plan[] = [
   {
     name: 'Start',
-    price: 20,
+    price: 9.99,
+    originalPrice: 20,
     period: 'mo',
     features: [
       '100 messages monthly',
@@ -46,7 +49,8 @@ const plans: Plan[] = [
   },
   {
     name: 'Pro',
-    price: 45,
+    price: 19.99,
+    originalPrice: 45,
     period: 'mo',
     features: [
       '250 messages monthly',
@@ -60,7 +64,8 @@ const plans: Plan[] = [
   },
   {
     name: 'Senior',
-    price: 90,
+    price: 49.99,
+    originalPrice: 90,
     period: 'mo',
     features: [
       '500 messages monthly',
@@ -101,6 +106,10 @@ export function SubscriptionModal({
   }, [open])
 
   const handleSubscribe = async (plan: Plan) => {
+    posthog.capture('plan_selected', {
+      plan_name: plan.name,
+      plan_price: plan.price,
+    })
     if (!plan.productId) {
       toast({
         title: 'Configuration Error',
@@ -274,9 +283,10 @@ export function SubscriptionModal({
             <DialogTitle className="text-2xl font-bold text-center">
               {isLoadingStatus ? 'Loading...' : 'Choose Your Plan'}
             </DialogTitle>
-            {/* <DialogDescription className="text-center mt-2">
-              {isLoadingStatus ? 'Checking subscription status...' : 'Select a plan'}
-            </DialogDescription> */}
+            <div className="text-center mt-2 bg-muted border border-border rounded-lg px-4 py-3 text-sm text-foreground">
+              <span className="font-semibold">Announcement: </span>
+              We have halved plan prices ✂️🥳 . React Native Vibe Code is now the most affordable vibe coding platform to create React Native apps. We will keep pushing to make the project the most open and affordable option to easily vibe code React Rative apps. Enjoy.
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -318,6 +328,9 @@ export function SubscriptionModal({
                         /{plan.period}
                       </span>
                     </div>
+                    <span className="text-2xl text-muted-foreground line-through">
+                      ${plan.originalPrice}/{plan.period}
+                    </span>
                   </div>
                   
                   <ul className="space-y-3">
