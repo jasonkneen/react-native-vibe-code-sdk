@@ -1,0 +1,12 @@
+.track {
+  animation: scroll-left 30s linear infinite;
+}
+
+.track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes scroll-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(-280px * 12 - 1rem * 12)); }
+}

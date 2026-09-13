@@ -6,6 +6,7 @@ import NextImage from 'next/image'
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
+import styles from './feature-marquee.module.css'
 
 export const FEATURES = [
   {
@@ -357,7 +358,7 @@ export function FeatureMarquee() {
 
   return (
     <div className="w-full mt-4 overflow-hidden relative group">
-      <div className="flex gap-4 py-8 whitespace-nowrap animate-scroll-left hover:[animation-play-state:paused]">
+      <div className={cn("flex gap-4 py-8 whitespace-nowrap", styles.track)}>
           {[...Array(3)].flatMap((_, repeatIndex) =>
             FEATURES.map((feature) => (
               <button
@@ -429,15 +430,6 @@ export function FeatureMarquee() {
           </DialogContent>
         </Dialog>
 
-      <style jsx global>{`
-        @keyframes scroll-left {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(calc(-280px * 12 - 1rem * 12)); }
-        }
-        .animate-scroll-left {
-          animation: scroll-left 30s linear infinite;
-        }
-      `}</style>
     </div>
   )
 }
